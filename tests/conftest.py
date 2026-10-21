@@ -2,7 +2,7 @@ import re
 import json
 import pytest
 from agent.trendweave import engine as e
-from agent.trendweave.review import PlanningSuggestion, DomainDecision
+from agent.trendweave.review import PlanningDraft, DomainDecision
 
 
 class Search:
@@ -37,16 +37,16 @@ class Model:
             if any(word in question for word in ['파이썬','맛집','주가','수학']):
                 return DomainDecision(domain_status='non_fashion',reason='비패션 목적',supported=False)
             return DomainDecision(domain_status='fashion',reason='패션 분석',supported='비교' not in question)
-        if schema is PlanningSuggestion:
+        if schema is PlanningDraft:
             data=json.loads(text.split('\n')[-1])
             question=data['planning_request']
             if '코디' in question or '컬러 트렌드' in question:
                 styling='코디' in question
-                return PlanningSuggestion(season=data.get('season_override') or '2027 S/S',brand=None,
+                return PlanningDraft(season=data.get('season_override') or '2027 S/S',brand=None,
                     report_type='styling' if styling else 'trend_analysis',selected_axes=['color','market'] if styling else ['color'],
                     axis_reasons={'color':'컬러 근거','market':'시장 근거'} if styling else {'color':'컬러 근거'},
                     report_direction=data.get('direction_override') or question,reason='요청에 맞는 패션 분석')
-            return PlanningSuggestion(season='2027 S/S',brand='ZARA',
+            return PlanningDraft(season='2027 S/S',brand='ZARA',
                 report_direction='요청에 맞춘 상품기획 방향 3개를 제안한다.',reason='다음 봄·여름 시즌을 준비한다.')
         if schema is e.SelectedResearchPlan:
             data=json.loads(text.split('\n')[-1])

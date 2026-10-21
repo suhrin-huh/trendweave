@@ -14,6 +14,7 @@ def main():
     if error:raise SystemExit(error)
     at=request_time()
     cases=[('implicit','한국 20-30대 고객을 위한 가벼운 일상 상품을 기획해줘.'),
+           ('default_brand_example','한국의 20-30대 고객이 일상에서 활용하기 쉬운 상품 중심으로 런웨이·컬러·시장·브랜드 트렌드를 분석하고 상품기획 방향 3개를 제안해줘.'),
            ('explicit','2028 F/W 시즌 ZARA 상품기획 방향을 제안해줘.')]
     results=[]
     for name,message in cases:
@@ -22,6 +23,9 @@ def main():
         except Exception as error:
             raise SystemExit(f'LLM preview failed ({type(error).__name__}); check model/API configuration')
         if name=='explicit':assert value.season=='2028 F/W'
+        if name=='default_brand_example':
+            assert value.brand=='ZARA' and value.report_type=='product_strategy'
+            assert set(value.selected_axes)=={'runway','color','market','brand'}
         results.append({'case':name,'requested_at':at,'planning_request':message,**value.model_dump()})
         print(json.dumps({'case':name,'requested_at':at,'season':value.season,'brand':value.brand,
                           'report_created':False},ensure_ascii=False),flush=True)
