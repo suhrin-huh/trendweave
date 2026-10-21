@@ -8,3 +8,4 @@ reports.db
 reports.db-*
 .artifacts/
 .pytest_cache/
+/reference/
