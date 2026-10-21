@@ -4,3 +4,7 @@ session.db
 __pycache__/
 *.log
 .DS_Store
+reports.db
+reports.db-*
+.artifacts/
+.pytest_cache/

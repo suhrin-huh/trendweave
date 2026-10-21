@@ -722,7 +722,17 @@ def run_research(state: dict) -> dict:
     # Research Subgraph 실행 후 최종 결과와 실행 기록만 상위 그래프로 반환
     axis = state["axis"]
     try:
-        output = research_subgraph.invoke(state, config={"recursion_limit": RECURSION_LIMIT})
+        # Nested custom streams do not automatically reach the parent stream.
+        # Relay each child event explicitly while keeping the final state local.
+        writer = get_stream_writer()
+        output = None
+        for mode, payload in research_subgraph.stream(
+                state, config={"recursion_limit": RECURSION_LIMIT},
+                stream_mode=["custom", "values"]):
+            if mode == "custom":
+                writer(payload)
+            else:
+                output = payload
         return {
             "research_results": {axis: output["result"]},
             "trace": output.get("trace", []),

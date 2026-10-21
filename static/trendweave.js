@@ -6,7 +6,7 @@ createApp({setup() {
   const seasons = ['2026 F/W','2027 S/S','2027 F/W','2028 S/S','2028 F/W'];
   let thread = sessionStorage.getItem('trendweave-thread');
   if (!thread) {thread = crypto.randomUUID(); sessionStorage.setItem('trendweave-thread', thread);}
-  let stream = null, poll = null, counter = 0;
+  let stream = null, poll = null, counter = 0, activeItem = null;
   const axisLabel = key => ({runway:'런웨이',color:'컬러',market:'시장',brand:'브랜드'}[key] || key);
   const statusLabel = status => ({queued:'준비 중',running:'분석 중',completed:'완료',failed:'생성 실패'}[status] || status);
   const scroll = () => nextTick(() => {if(logEl.value) logEl.value.scrollTop = logEl.value.scrollHeight;});
@@ -23,8 +23,8 @@ createApp({setup() {
     const data = await (await api(`/reports/${item.report_id}`)).json();
     Object.assign(item, {status:data.status, result:data.result, report_html:data.report_html, error:data.error});
     if (data.status === 'completed' || data.status === 'failed') {
-      stopConnection(); sending.value=false; item.connectionMessage='';
-      sessionStorage.removeItem('trendweave-active'); scroll();
+      if (activeItem === item || activeItem === null) {stopConnection(); sending.value=false;}
+      item.connectionMessage=''; scroll();
     }
     return data;
   }
@@ -33,7 +33,7 @@ createApp({setup() {
     catch {item.connectionMessage='서버에 연결할 수 없습니다. 분석 상태를 다시 확인해 주세요.';}
   }
   function connect(item) {
-    stopConnection(); sending.value=true;
+    stopConnection(); activeItem=item; sending.value=true;
     stream = new EventSource(`/reports/${item.report_id}/events?after=${item.lastEventId || 0}`);
     stream.onmessage = async event => {
       item.connectionMessage='';

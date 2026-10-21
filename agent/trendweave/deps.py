@@ -10,7 +10,7 @@ def initialize():
         return '필요한 API 키를 .env에 설정하세요: ' + ', '.join(missing)
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
-        from langchain_tavily import TavilySearch
+        from .search import TavilySearchAdapter
         limiter = InMemoryRateLimiter(
             requests_per_second=float(os.getenv('TREND_REQUESTS_PER_SECOND', '0.25')),
             check_every_n_seconds=0.1, max_bucket_size=1)
@@ -18,7 +18,7 @@ def initialize():
                        timeout=60, max_retries=2, rate_limiter=limiter)
         primary = ChatGoogleGenerativeAI(**options, temperature=0.2)
         judge = ChatGoogleGenerativeAI(**options, temperature=0)
-        engine.configure(primary, judge, TavilySearch(max_results=5, search_depth='basic'))
+        engine.configure(primary, judge, TavilySearchAdapter(os.environ['TAVILY_API_KEY'], timeout=float(os.getenv('TREND_SEARCH_TIMEOUT', '30'))))
         return None
     except Exception:
         return '분석 도구 초기화에 실패했습니다. 모델 설정과 설치된 패키지를 확인하세요.'
