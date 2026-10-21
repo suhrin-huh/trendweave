@@ -33,27 +33,13 @@ async def verify():
             await page.screenshot(path=str(ARTIFACTS/'mobile.png'),full_page=True)
             assert await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
             await page.set_viewport_size({'width':1440,'height':1000})
-            if '--reuse-last' in sys.argv:
-                import sqlite3
-                connection=sqlite3.connect(ARTIFACTS/'browser-jobs.db')
-                row=connection.execute("SELECT id,request FROM report_jobs WHERE status='completed' ORDER BY created_at DESC LIMIT 1").fetchone()
-                connection.close()
-                if not row:
-                    raise RuntimeError('No completed report available for reuse')
-                report_id=row[0]
-                saved={**json.loads(row[1]),'id':report_id,'request':json.loads(row[1])['planning_request']}
-                await page.evaluate("saved => sessionStorage.setItem('trendweave-active',JSON.stringify(saved))",saved)
-            else:
-                async with page.expect_response(lambda response:response.url.endswith('/reports') and response.request.method=='POST') as created:
-                    await button.click()
-                response=await created.value
-                assert response.status==202,await response.text()
-                report_id=(await response.json())['report_id']
-                assert await button.is_disabled()
-            # Reload: restore the saved job, without issuing another POST.
-            await page.reload()
-            await page.locator('.message.report').wait_for()
-            print('restored report',report_id,flush=True)
+            async with page.expect_response(lambda response:response.url.endswith('/reports') and response.request.method=='POST') as created:
+                await button.click()
+            response=await created.value
+            assert response.status==202,await response.text()
+            report_id=(await response.json())['report_id']
+            assert await button.is_disabled()
+            # Keep this page open while the job runs. Reload now resets the chat.
             for _ in range(180):
                 status=await page.request.get(f'http://127.0.0.1:8600/reports/{report_id}')
                 report=await status.json()
@@ -85,6 +71,15 @@ async def verify():
             await page.get_by_role('button',name='전체 보고서 보기').click()
             await page.screenshot(path=str(ARTIFACTS/'mobile-report.png'),full_page=True)
             assert await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+            await page.reload()
+            await page.wait_for_function("!document.querySelector('.example button').disabled")
+            assert await page.locator('.message').count()==0
+            assert await page.get_by_role('dialog').count()==0
+            assert await page.get_by_role('textbox',name='상품기획 요청').input_value()==''
+            assert await page.locator('.welcome').is_visible()
+            # Resetting the view does not delete the persisted report.
+            saved=await page.request.get(f'http://127.0.0.1:8600/reports/{report_id}')
+            assert (await saved.json())['status']=='completed'
             assert not errors,errors
             (ARTIFACTS/'browser-report.md').write_text(report['result']['final_markdown'])
             (ARTIFACTS/'browser-verification.json').write_text(json.dumps({
@@ -100,6 +95,8 @@ async def verify():
 
 
 def main():
+    import argparse
+    argparse.ArgumentParser(description=__doc__).parse_args()
     ARTIFACTS.mkdir(exist_ok=True)
     processes=[]
     logs=[]

@@ -5,8 +5,11 @@ createApp({setup() {
   const season = ref('2027 S/S'), input = ref(''), sending = ref(false), ready = ref(false);
   const configurationError = ref(''), messages = ref([]), selected = ref(null), logEl = ref(null), modalEl = ref(null);
   const seasons = ['2026 F/W','2027 S/S','2027 F/W','2028 S/S','2028 F/W'];
-  let thread = sessionStorage.getItem('trendweave-thread');
-  if (!thread) {thread = crypto.randomUUID(); sessionStorage.setItem('trendweave-thread', thread);}
+  // A page load always starts a fresh conversation. Remove keys written by
+  // earlier versions, but leave unrelated application storage untouched.
+  sessionStorage.removeItem('trendweave-thread');
+  sessionStorage.removeItem('trendweave-active');
+  const thread = crypto.randomUUID();
   let stream = null, poll = null, counter = 0, activeItem = null;
   const axisLabel = key => ({runway:'런웨이',color:'컬러',market:'시장',brand:'브랜드'}[key] || key);
   const statusLabel = status => ({queued:'준비 중',running:'분석 중',completed:'완료',failed:'생성 실패'}[status] || status);
@@ -62,7 +65,6 @@ createApp({setup() {
     try {
       const result=await (await api('/reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({season:requestedSeason,planning_request:request,thread_id:thread})})).json();
       item.report_id=result.report_id;
-      sessionStorage.setItem('trendweave-active',JSON.stringify({id:result.report_id,brand:brand.value,season:requestedSeason,request}));
       connect(item);
     } catch(error) {item.status='failed';item.error=error.message;sending.value=false;}
   }
@@ -99,8 +101,6 @@ createApp({setup() {
     try {
       const health=await (await api('/health')).json(); brand.value=health.brand || 'ZARA'; ready.value=health.analysis_ready === true;
       configurationError.value=health.configuration_error || (ready.value?'':'패션 분석 서버가 준비되지 않았습니다. 서버 설정을 확인하세요.');
-      const saved=JSON.parse(sessionStorage.getItem('trendweave-active') || 'null');
-      if(saved) {const item=newItem(saved.request,saved.season);item.brand=saved.brand || brand.value;item.report_id=saved.id;messages.value.push(item);await reconnect(item);}
     } catch {configurationError.value='분석 서버에 연결할 수 없습니다. 서버 실행 상태를 확인하고 새로고침해 주세요.';}
   });
   onBeforeUnmount(()=>{stopConnection();document.removeEventListener('keydown',modalKeys);});
