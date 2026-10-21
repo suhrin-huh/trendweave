@@ -37,7 +37,20 @@
             <h3>{{ item.season }} · {{ item.brand }}</h3>
             <div v-if="item.status==='queued' || item.status==='running'" class="progress"><span class="spinner"></span>{{ item.latest || '분석을 준비하고 있습니다.' }}</div>
             <div v-if="item.connectionMessage" class="notice">{{ item.connectionMessage }} <button class="text-button" @click="reconnect(item)">상태 다시 확인</button></div>
-            <details v-if="item.events.length" class="activity"><summary>진행 기록 · {{ item.events.length }}건</summary><ol><li v-for="event in item.events" :key="event.id"><b v-if="event.axis">{{ axisLabel(event.axis) }} · </b>{{ event.message }}</li></ol></details>
+            <section class="activity" aria-label="누적 분석 과정">
+              <button class="activity-toggle" type="button" :aria-expanded="item.historyExpanded" :aria-controls="'analysis-history-'+item.id" @click="toggleHistory(item)">
+                <span>분석 과정 <span class="activity-count">{{ item.events.length }}개 기록</span></span><span>{{ item.historyExpanded ? '접기 −' : '펼치기 +' }}</span>
+              </button>
+              <div v-show="item.historyExpanded" :id="'analysis-history-'+item.id" class="activity-panel">
+                <p v-if="!item.events.length" class="activity-empty">분석이 시작되면 진행 단계가 순서대로 쌓입니다.</p>
+                <ol v-else class="activity-timeline" :ref="el => setHistoryElement(item.id, el)" tabindex="0" aria-label="분석 진행 기록">
+                  <li v-for="(event,index) in item.events" :key="event.id" :class="{'is-latest':index===item.events.length-1}">
+                    <span class="event-index" aria-hidden="true">{{ String(index+1).padStart(2,'0') }}</span>
+                    <div><div class="event-heading"><strong>{{ stepLabel(event.step) }}</strong><span v-if="event.axis" class="event-axis">{{ axisLabel(event.axis) }}</span></div><p>{{ event.message }}</p></div>
+                  </li>
+                </ol>
+              </div>
+            </section>
             <template v-if="item.status==='completed'">
               <p class="summary">{{ item.result.report.executive_summary }}</p>
               <div class="quality"><span v-for="(axis,key) in item.result.research_results" :key="key">{{ axisLabel(key) }} <b>{{ axis.confidence }}</b></span></div>

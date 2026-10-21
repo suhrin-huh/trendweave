@@ -185,10 +185,24 @@ textarea::placeholder { color: #767676; }
 .workspace > .notice { margin: 15px 23px 0; }
 .notice.error { border-left-color: var(--ink); background: #f2f2f2; color: var(--ink); }
 .text-button { padding: 4px; border: 0; background: none; color: inherit; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
-.activity { margin: 16px 0; color: #606060; font-size: 10px; }
-.activity summary { cursor: pointer; text-underline-offset: 4px; }
-.activity summary:hover { color: var(--ink); }
-.activity ol { max-height: 180px; overflow: auto; padding-left: 18px; line-height: 2; }
+/* Each report keeps its own chronological, independently collapsible history. */
+.activity { margin: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 11px; }
+.activity-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 13px 0; border: 0; background: var(--paper); color: var(--ink); text-align: left; font-size: 11px; }
+.activity-toggle:hover { color: #555; }
+.activity-count { margin-left: 9px; color: var(--muted); font-size: 9px; white-space: nowrap; }
+.activity-panel { padding-bottom: 12px; }
+.activity-empty { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.8; }
+.activity-timeline { max-height: 240px; margin: 0; padding: 0 10px 0 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; list-style: none; }
+.activity-timeline li { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; }
+.activity-timeline li:last-child { border-bottom: 0; }
+.event-index { padding-top: 2px; color: #888; font-size: 9px; font-variant-numeric: tabular-nums; }
+.event-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; line-height: 1.7; }
+.event-heading strong { font-size: 10px; font-weight: 500; }
+.event-axis { padding: 1px 5px; border: 1px solid #ddd; color: var(--muted); font-size: 9px; }
+.activity-timeline li p { margin: 5px 0 0; color: #666; font-size: 10px; line-height: 1.9; overflow-wrap: anywhere; white-space: pre-wrap; }
+.activity-timeline .is-latest .event-index { color: var(--ink); }
+.activity-timeline .is-latest .event-heading strong { font-weight: 600; }
+@media (max-width: 700px) { .activity-timeline { max-height: 180px; } }
 .progress { display: flex; align-items: center; gap: 10px; color: #555; font-size: 11px; line-height: 1.9; }
 .spinner { flex-shrink: 0; width: 12px; height: 12px; border: 1px solid #ddd; border-top-color: var(--ink); border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

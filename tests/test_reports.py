@@ -50,6 +50,10 @@ def test_creation_and_replay(report_app):
         assert report['request']['season']=='2027 S/S'
         assert report['request']['brand']=='ZARA'
         assert '<table>' in report['report_html']
+        persisted=report_app.state.report_store.events(report_id)
+        assert report['events']==[{**event,'id':seq} for seq,event in persisted]
+        assert report['events'][0]['step']=='queued'
+        assert report['events'][-1]['step']=='completed'
         content=client.get(f'/reports/{report_id}/events').text
         assert 'id: 1' in content and '[DONE]' in content
         cursor=report_app.state.report_store.events(report_id)[-1][0]

@@ -12,8 +12,44 @@ createApp({setup() {
   sessionStorage.removeItem('trendweave-active');
   const thread = crypto.randomUUID();
   let stream = null, poll = null, counter = 0, activeItem = null;
+  const historyElements = new Map();
   const axisLabel = key => ({runway:'런웨이',color:'컬러',market:'시장',brand:'브랜드'}[key] || key);
+  const stepLabel = key => ({queued:'분석 대기',normalizer:'요청 정리',planner:'검색 계획',search:'자료 검색',grade:'문서 평가',rewrite:'재검색 계획',extract:'신호 추출',strategy:'전략 작성',critic:'전략 검토',report:'보고서 작성',completed:'분석 완료',failed:'분석 실패',error:'자료 수집 오류'}[key] || key);
   const statusLabel = status => ({queued:'준비 중',running:'분석 중',completed:'완료',failed:'생성 실패'}[status] || status);
+  function setHistoryElement(id, el) {
+    if (el) historyElements.set(id, el);
+    else historyElements.delete(id);
+  }
+  function appendEvents(item, incoming) {
+    const el = historyElements.get(item.id);
+    const follow = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    const events = new Map(item.events.map(event => [event.id, event]));
+    let added = 0;
+    for (const event of incoming || []) {
+      const id = Number(event.id);
+      if (!Number.isInteger(id) || id < 1 || events.has(id) || typeof event.message !== 'string') continue;
+      events.set(id, {...event, id});
+      added++;
+    }
+    if (!added) return false;
+    item.events = [...events.values()].sort((a, b) => a.id - b.id);
+    const latest = item.events[item.events.length - 1];
+    item.lastEventId = latest.id;
+    item.latest = latest.message;
+    nextTick(() => {
+      const current = historyElements.get(item.id);
+      if (follow && item.historyExpanded && current) current.scrollTop = current.scrollHeight;
+    });
+    return true;
+  }
+  async function toggleHistory(item) {
+    item.historyExpanded = !item.historyExpanded;
+    if (item.historyExpanded) {
+      await nextTick();
+      const el = historyElements.get(item.id);
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+  }
   function onConversationScroll() {
     const el = logEl.value;
     if (!el) return;
@@ -48,6 +84,7 @@ createApp({setup() {
   async function refresh(item) {
     const data = await (await api(`/reports/${item.report_id}`)).json();
     const wasPending = item.status === 'queued' || item.status === 'running';
+    const historyChanged = appendEvents(item, data.events);
     Object.assign(item, {status:data.status, result:data.result, report_html:data.report_html, error:data.error, brand:data.result?.brand || data.result?.report?.brand || data.request?.brand || item.brand});
     if (data.status === 'completed' || data.status === 'failed') {
       if (activeItem === item) {
@@ -56,6 +93,8 @@ createApp({setup() {
       }
       item.connectionMessage='';
       if (wasPending) scrollToLatest();
+    } else if (historyChanged) {
+      scrollToLatest();
     }
     return data;
   }
@@ -71,10 +110,10 @@ createApp({setup() {
       if(event.data === '[DONE]') {try {await refresh(item);} catch {item.connectionMessage='결과를 불러오지 못했습니다.';} return;}
       let data; try {data=JSON.parse(event.data);} catch {return;}
       const id = Number(event.lastEventId);
-      if (id <= item.lastEventId) return;
-      item.lastEventId=id; item.events.push({...data,id}); item.latest=data.message;
-      if (!['completed','failed'].includes(data.step)) item.status='running';
-      else {try {await refresh(item);} catch {item.connectionMessage='결과를 불러오지 못했습니다.';}}
+      if (!appendEvents(item, [{...data, id}])) return;
+      if (['completed','failed'].includes(data.step)) {
+        try {await refresh(item);} catch {item.connectionMessage='결과를 불러오지 못했습니다.';}
+      } else if (!['completed','failed'].includes(item.status)) item.status='running';
       scrollToLatest();
     };
     stream.onerror = () => {item.connectionMessage='연결을 복구하고 있습니다. 진행 중인 분석은 계속됩니다.';};
@@ -82,7 +121,7 @@ createApp({setup() {
     poll=setInterval(async () => {try {await refresh(item);} catch {item.connectionMessage='서버 연결을 확인해 주세요.';}}, 5000);
   }
   function newItem(request, reportSeason) {
-    return reactive({id:++counter,kind:'report',brand:brand.value,season:reportSeason,request,status:'queued',events:[],lastEventId:0,latest:'',connectionMessage:'',result:null,report_html:'',error:'',downloading:false,pdfError:''});
+    return reactive({id:++counter,kind:'report',brand:brand.value,season:reportSeason,request,status:'queued',events:[],historyExpanded:true,lastEventId:0,latest:'',connectionMessage:'',result:null,report_html:'',error:'',downloading:false,pdfError:''});
   }
   async function generate(request, requestedSeason=season.value) {
     if(sending.value || !ready.value || !request.trim()) return;
@@ -137,5 +176,5 @@ createApp({setup() {
     } catch {configurationError.value='분석 서버에 연결할 수 없습니다. 서버 실행 상태를 확인하고 새로고침해 주세요.';}
   });
   onBeforeUnmount(()=>{stopConnection();document.removeEventListener('keydown',modalKeys);});
-  return {brand,season,seasons,input,sending,ready,configurationError,messages,selected,logEl,modalEl,inputEl,hasNewMessages,onConversationScroll,scrollToLatest,onInputKeydown,exampleRequest,axisLabel,statusLabel,generate,submit,retry,reconnect,downloadPdf};
+  return {brand,season,seasons,input,sending,ready,configurationError,messages,selected,logEl,modalEl,inputEl,hasNewMessages,onConversationScroll,scrollToLatest,onInputKeydown,exampleRequest,axisLabel,stepLabel,statusLabel,setHistoryElement,toggleHistory,generate,submit,retry,reconnect,downloadPdf};
 }}).mount('#app');

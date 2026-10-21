@@ -52,6 +52,10 @@ async def create_report(body: ReportRequest, request: Request):
 @router.get('/reports/{report_id}')
 async def read_report(report_id: str, request: Request):
     report = get_report(request, report_id)
+    # Polling may observe completion before the last SSE frames arrive. Return
+    # the persisted history so closing that stream does not lose earlier steps.
+    report['events'] = [{**event, 'id': seq} for seq, event in
+                        request.app.state.report_store.events(report_id)]
     result = report.get('result')
     if result:
         from services.pdf_service import render_markdown
