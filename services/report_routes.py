@@ -6,6 +6,8 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
+from agent.trendweave.config import DEFAULT_BRAND
+
 router = APIRouter()
 
 
@@ -101,5 +103,8 @@ async def report_pdf(report_id: str, request: Request):
     except Exception:
         raise HTTPException(503, 'PDF를 생성하지 못했습니다. Chromium 설치를 확인하고 다운로드를 다시 시도해 주세요.')
     season = report['request']['season'].replace(' ', '_').replace('/', '')
+    # Existing reports keep the brand they were actually researched for.
+    brand = report['result'].get('brand') or report['result'].get('report', {}).get('brand') or report['request'].get('brand', DEFAULT_BRAND)
+    brand = re.sub(r'[^A-Za-z0-9_-]', '_', brand)
     return Response(content, media_type='application/pdf', headers={
-        'Content-Disposition': f'attachment; filename="TrendWeave_UNIQLO_{season}_{report_id}.pdf"'})
+        'Content-Disposition': f'attachment; filename="TrendWeave_{brand}_{season}_{report_id}.pdf"'})

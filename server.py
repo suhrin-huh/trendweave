@@ -23,6 +23,7 @@ from langsmith import traceable
 from langsmith.run_helpers import get_current_run_tree
 from pydantic import BaseModel
 
+from agent.trendweave.config import DEFAULT_BRAND
 from agent.deps import SupervisorDeps
 from agent.fake_llm import FastLLM, QualityLLM
 from agent.graph import build_graph
@@ -122,7 +123,7 @@ async def service_mode_guard(request, call_next):
 @app.get("/health")
 async def health():
     if not hasattr(app.state, "deps"):
-        return {"status": "ok", "service": "trendweave", "brand": "UNIQLO",
+        return {"status": "ok", "service": "trendweave", "brand": DEFAULT_BRAND,
                 "analysis_ready": app.state.trend_error is None,
                 "configuration_error": app.state.trend_error,
                 "model": os.getenv("TREND_MODEL", "gemini-3.1-flash-lite"),

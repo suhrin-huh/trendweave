@@ -1,3 +1,5 @@
+DEFAULT_BRAND = "ZARA"
+
 from datetime import date, timedelta
 
 AXES = ["runway", "color", "market", "brand"]

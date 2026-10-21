@@ -12,7 +12,7 @@ class Search:
             return {'results': []}
         return {'results': [{'title': f'Spring Summer 2027 collection {i}',
                              'url': f'https://example.com/research/{i}',
-                             'content': 'Linen shirts, blue palette, light materials, consumer demand and UNIQLO basics.'}
+                             'content': 'Linen shirts, blue palette, light materials, consumer demand and ZARA basics.'}
                             for i in range(3)]}
 
 
@@ -44,7 +44,7 @@ class Model:
                 return schema(positioning=signal,target_customer=signal,price_range=signal,core_categories=[signal],design_identity=signal)
             return schema(**{field:[signal] for field in schema.model_fields})
         if schema is e.ProductStrategyReport:
-            return e.ProductStrategyReport(season='2027 S/S',brand='UNIQLO',executive_summary='일상에서 활용하는 가벼운 상품 전략이다.',
+            return e.ProductStrategyReport(season='2027 S/S',brand='ZARA',executive_summary='일상에서 활용하는 가벼운 상품 전략이다.',
                 runway_insight='런웨이 신호다.',color_insight='블루 컬러다.',current_market_insight='실용적 소비다.',
                 brand_insight='베이직 중심이다.',signal_connection='네 분야의 신호가 연결된다.',final_note='내부 자료를 함께 확인한다.',
                 product_directions=[e.ProductDirection(direction_name=f'전략 {i}',adoption_level='선택적 반영',rationale='확인된 자료를 반영한다.',
@@ -66,4 +66,4 @@ def configured(monkeypatch):
 
 @pytest.fixture
 def result(configured):
-    return configured.analyze_product_strategy('2027 S/S','UNIQLO','한국 20-30대 일상 상품 기획')
+    return configured.analyze_product_strategy('2027 S/S','ZARA','한국 20-30대 일상 상품 기획')

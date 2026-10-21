@@ -3,6 +3,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pydantic import TypeAdapter
 from agent.trendweave import engine
+from agent.trendweave.config import DEFAULT_BRAND
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class ReportService:
     def run_graph(request, emit):
         final = None
         for mode, payload in engine.trend_agent.stream(
-                {**request, 'brand': 'UNIQLO'},
+                {**request, 'brand': DEFAULT_BRAND},
                 config={'recursion_limit': engine.RECURSION_LIMIT},
                 stream_mode=['custom', 'values']):
             if mode == 'custom':
@@ -36,6 +37,7 @@ class ReportService:
         return TypeAdapter(dict).dump_python(final, mode='json')
 
     def submit(self, request):
+        request = {**request, 'brand': DEFAULT_BRAND}
         if not self.slots.acquire(blocking=False):
             raise OverflowError('대기 중인 분석이 많습니다. 잠시 후 다시 시도해 주세요.')
         try:

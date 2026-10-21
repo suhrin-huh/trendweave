@@ -1,6 +1,7 @@
 const {createApp, ref, reactive, nextTick, watch, onMounted, onBeforeUnmount} = Vue;
 createApp({setup() {
   const exampleRequest = '한국의 20-30대 고객이 일상에서 활용하기 쉬운 상품 중심으로 런웨이·컬러·시장·브랜드 트렌드를 분석하고 상품기획 방향 3개를 제안해줘.';
+  const brand = ref('ZARA');
   const season = ref('2027 S/S'), input = ref(''), sending = ref(false), ready = ref(false);
   const configurationError = ref(''), messages = ref([]), selected = ref(null), logEl = ref(null), modalEl = ref(null);
   const seasons = ['2026 F/W','2027 S/S','2027 F/W','2028 S/S','2028 F/W'];
@@ -21,7 +22,7 @@ createApp({setup() {
   function stopConnection() {if(stream) stream.close(); stream=null; if(poll) clearInterval(poll); poll=null;}
   async function refresh(item) {
     const data = await (await api(`/reports/${item.report_id}`)).json();
-    Object.assign(item, {status:data.status, result:data.result, report_html:data.report_html, error:data.error});
+    Object.assign(item, {status:data.status, result:data.result, report_html:data.report_html, error:data.error, brand:data.result?.brand || data.result?.report?.brand || data.request?.brand || item.brand});
     if (data.status === 'completed' || data.status === 'failed') {
       if (activeItem === item || activeItem === null) {stopConnection(); sending.value=false;}
       item.connectionMessage=''; scroll();
@@ -51,17 +52,17 @@ createApp({setup() {
     poll=setInterval(async () => {try {await refresh(item);} catch {item.connectionMessage='서버 연결을 확인해 주세요.';}}, 5000);
   }
   function newItem(request, reportSeason) {
-    return reactive({id:++counter,kind:'report',season:reportSeason,request,status:'queued',events:[],lastEventId:0,latest:'',connectionMessage:'',result:null,report_html:'',error:'',downloading:false,pdfError:''});
+    return reactive({id:++counter,kind:'report',brand:brand.value,season:reportSeason,request,status:'queued',events:[],lastEventId:0,latest:'',connectionMessage:'',result:null,report_html:'',error:'',downloading:false,pdfError:''});
   }
   async function generate(request, requestedSeason=season.value) {
     if(sending.value || !ready.value || !request.trim()) return;
     sending.value=true;
-    messages.value.push({id:++counter,kind:'user',text:`${requestedSeason} · UNIQLO\n${request}`});
+    messages.value.push({id:++counter,kind:'user',text:`${requestedSeason} · ${brand.value}\n${request}`});
     const item=newItem(request,requestedSeason); messages.value.push(item); input.value=''; scroll();
     try {
       const result=await (await api('/reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({season:requestedSeason,planning_request:request,thread_id:thread})})).json();
       item.report_id=result.report_id;
-      sessionStorage.setItem('trendweave-active',JSON.stringify({id:result.report_id,season:requestedSeason,request}));
+      sessionStorage.setItem('trendweave-active',JSON.stringify({id:result.report_id,brand:brand.value,season:requestedSeason,request}));
       connect(item);
     } catch(error) {item.status='failed';item.error=error.message;sending.value=false;}
   }
@@ -73,7 +74,7 @@ createApp({setup() {
     try {
       const response=await api(`/reports/${item.report_id}/pdf`);
       const blob=await response.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
-      a.href=url; a.download=`TrendWeave_UNIQLO_${item.season.replace(/\W/g,'')}_${item.report_id}.pdf`;
+      a.href=url; a.download=`TrendWeave_${item.brand}_${item.season.replace(/\W/g,'')}_${item.report_id}.pdf`;
       document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
     } catch(error) {item.pdfError=error.message;} finally {item.downloading=false;}
   }
@@ -96,12 +97,12 @@ createApp({setup() {
   onMounted(async () => {
     document.addEventListener('keydown',modalKeys);
     try {
-      const health=await (await api('/health')).json(); ready.value=health.analysis_ready === true;
+      const health=await (await api('/health')).json(); brand.value=health.brand || 'ZARA'; ready.value=health.analysis_ready === true;
       configurationError.value=health.configuration_error || (ready.value?'':'패션 분석 서버가 준비되지 않았습니다. 서버 설정을 확인하세요.');
       const saved=JSON.parse(sessionStorage.getItem('trendweave-active') || 'null');
-      if(saved) {const item=newItem(saved.request,saved.season);item.report_id=saved.id;messages.value.push(item);await reconnect(item);}
+      if(saved) {const item=newItem(saved.request,saved.season);item.brand=saved.brand || brand.value;item.report_id=saved.id;messages.value.push(item);await reconnect(item);}
     } catch {configurationError.value='분석 서버에 연결할 수 없습니다. 서버 실행 상태를 확인하고 새로고침해 주세요.';}
   });
   onBeforeUnmount(()=>{stopConnection();document.removeEventListener('keydown',modalKeys);});
-  return {season,seasons,input,sending,ready,configurationError,messages,selected,logEl,modalEl,exampleRequest,axisLabel,statusLabel,generate,submit,retry,reconnect,downloadPdf};
+  return {brand,season,seasons,input,sending,ready,configurationError,messages,selected,logEl,modalEl,exampleRequest,axisLabel,statusLabel,generate,submit,retry,reconnect,downloadPdf};
 }}).mount('#app');

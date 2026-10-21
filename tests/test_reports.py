@@ -48,6 +48,7 @@ def test_creation_and_replay(report_app):
     with TestClient(report_app) as client:
         report_id,report=completed(client)
         assert report['request']['season']=='2027 S/S'
+        assert report['request']['brand']=='ZARA'
         assert '<table>' in report['report_html']
         content=client.get(f'/reports/{report_id}/events').text
         assert 'id: 1' in content and '[DONE]' in content
@@ -132,6 +133,7 @@ def test_korean_pdf(report_app):
         assert response.status_code==200,response.text[:300] if response.status_code!=200 else ''
         assert response.content.startswith(b'%PDF')
         assert 'attachment' in response.headers['content-disposition']
+        assert 'TrendWeave_ZARA_' in response.headers['content-disposition']
         reader=PdfReader(io.BytesIO(response.content))
         text='\n'.join(page.extract_text() for page in reader.pages)
         assert len(reader.pages)>=2
@@ -140,3 +142,15 @@ def test_korean_pdf(report_app):
         assert '재검색' not in report['result']['final_markdown'] or '재검색' in text
         # Embedded font resource is present on the generated pages.
         assert any(page['/Resources'].get('/Font') for page in reader.pages)
+
+
+def test_existing_report_pdf_preserves_original_brand(report_app,monkeypatch):
+    async def pdf(_):
+        return b'%PDF-test'
+    monkeypatch.setattr('services.pdf_service.create_pdf',pdf)
+    with TestClient(report_app) as client:
+        report_id=report_app.state.report_store.create({'season':'2027 S/S'})
+        report_app.state.report_store.complete(report_id,{'brand':'UNIQLO','final_markdown':'# UNIQLO'})
+        response=client.get(f'/reports/{report_id}/pdf')
+        assert response.status_code==200
+        assert 'TrendWeave_UNIQLO_' in response.headers['content-disposition']

@@ -6,7 +6,7 @@ def test_full_graph_and_request_planning(configured):
     e=configured
     events=[]
     states=[]
-    for mode,payload in e.trend_agent.stream({'season':'2027 S/S','brand':'UNIQLO','planning_request':'데님 상품 기획'},
+    for mode,payload in e.trend_agent.stream({'season':'2027 S/S','brand':'ZARA','planning_request':'데님 상품 기획'},
             config={'recursion_limit':50},stream_mode=['custom','values']):
         (events if mode=='custom' else states).append(payload)
     result=states[-1]
@@ -24,14 +24,14 @@ def test_full_graph_and_request_planning(configured):
 def test_empty_research_stops_at_bound(configured):
     e=configured
     e.search_tool=Search(empty=True)
-    state={'season':'2028 F/W','brand':'UNIQLO','planning_request':'상품 기획'}
+    state={'season':'2028 F/W','brand':'ZARA','planning_request':'상품 기획'}
     state.update(e.input_normalizer(state));state.update(e.research_planner(state))
     branch=e.research_subgraph.invoke(e.dispatch_research(state)[0].arg,config={'recursion_limit':50})
     assert branch['result'].attempts == 3
     assert branch['result'].confidence=='낮음'
     assert branch['result'].data_gaps
     with pytest.raises(RuntimeError,match='자료를 확보'):
-        e.analyze_product_strategy('2028 F/W','UNIQLO','상품 기획')
+        e.analyze_product_strategy('2028 F/W','ZARA','상품 기획')
 
 
 def test_evidence_and_color_rules(configured,result):
@@ -62,7 +62,7 @@ def test_revisions_stop_and_critic_failure(configured,result):
             report.product_directions=report.product_directions[:1]
             return report
     e.strategy_model=WrongWriter()
-    output=e.analyze_product_strategy('2027 S/S','UNIQLO','상품 기획')
+    output=e.analyze_product_strategy('2027 S/S','ZARA','상품 기획')
     assert output['revision_count']==2
     assert not output['critique'].passed
     assert '한도' in output['final_markdown']
@@ -83,7 +83,7 @@ def test_grade_season_and_market_rules(configured):
         def invoke(self,_):
             return e.GradeResult(grades=[e.DocumentGrade(doc_id='R1',is_relevant=True,season_match='불일치',covered_aspects=['소재'],reason='이전 시즌')])
     e.grade_model=Grades()
-    state={'axis':'runway','plan':{'required_aspects':['소재']},'season':'2027 S/S','brand':'UNIQLO',
+    state={'axis':'runway','plan':{'required_aspects':['소재']},'season':'2027 S/S','brand':'ZARA',
            'today':'2026-10-21','season_terms':['SS27'], 'new_doc_ids':['R1'],
            'candidates':[{'doc_id':'R1','title':'SS26','url':'https://example.com','content':'linen','published_date':''}]}
     output=e.research_grade(state)
@@ -110,3 +110,13 @@ def test_tavily_bounded_http(monkeypatch):
     monkeypatch.setattr(httpx,'Client',Client)
     assert TavilySearchAdapter('test-key',timeout=7).invoke({'query':'SS27','topic':'news'})=={'results':[]}
     assert seen[0]['max_results']==5
+
+
+def test_service_enforces_zara_brand(configured):
+    from services.report_service import ReportService
+    output = ReportService.run_graph({'season':'2027 S/S','brand':'UNIQLO',
+        'planning_request':'한국 20-30대 일상 상품 기획'}, lambda event: None)
+    assert output['brand'] == 'ZARA'
+    assert 'ZARA' in output['research_plan']['brand']['queries'][0]
+    assert 'UNIQLO' not in output['research_plan']['brand']['queries'][0]
+    assert '**Brand:** ZARA' in output['final_markdown']
