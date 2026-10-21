@@ -9,7 +9,7 @@ fi
 "$PYTHON" - <<'PY'
 from dotenv import load_dotenv
 import os
-load_dotenv()
+load_dotenv(".env")
 if os.getenv('SERVICE_MODE', 'trendweave') == 'trendweave':
     missing = [k for k in ('GOOGLE_API_KEY','TAVILY_API_KEY') if not os.getenv(k, '').strip()]
     if missing:
