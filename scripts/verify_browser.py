@@ -78,7 +78,7 @@ async def verify():
             await page.wait_for_function("!document.querySelector('.example button').disabled")
             assert await page.locator('.message').count()==0
             assert await page.get_by_role('dialog').count()==0
-            assert await page.get_by_role('textbox',name='상품기획 요청').input_value()==''
+            assert await page.get_by_role('textbox',name='패션 분석 요청').input_value()==''
             assert await page.locator('.welcome').is_visible()
             # Resetting the view does not delete the persisted report.
             saved=await page.request.get(f'http://127.0.0.1:8600/reports/{report_id}')

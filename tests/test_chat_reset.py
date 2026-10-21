@@ -47,6 +47,8 @@ def test_reload_starts_new_conversation(result, job_status):
                         await route.fulfill(json={'analysis_ready': True, 'brand': 'ZARA'})
                     elif path == '/reports/preview':
                         await route.fulfill(json=preview_response(request))
+                    elif path.endswith('/cancel'):
+                        await route.fulfill(json={'status':'cancelled'})
                     elif path == '/reports' and request.method == 'POST':
                         requests.append(request.post_data_json)
                         await route.fulfill(status=202, json={'report_id': 'reset-test', 'status': 'queued'})
@@ -69,11 +71,12 @@ def test_reload_starts_new_conversation(result, job_status):
                 assert await page.locator('.message').count() == 0
                 await button.click()
                 await page.get_by_label('분석 시즌',exact=True).fill('2027 F/W')
+                await page.get_by_role('button',name='제안 다시 받기',exact=True).click()
                 await page.get_by_role('button',name='확인하고 보고서 생성').click()
                 await page.locator('.message.report').wait_for()
                 if job_status == 'completed':
                     await page.get_by_role('button', name='전체 보고서 보기').wait_for()
-                    await page.get_by_role('textbox', name='상품기획 요청').fill('미전송 초안')
+                    await page.get_by_role('textbox', name='패션 분석 요청').fill('미전송 초안')
                     await page.get_by_role('button', name='전체 보고서 보기').click()
                     await page.get_by_role('dialog').wait_for()
                 else:
@@ -91,7 +94,7 @@ def test_reload_starts_new_conversation(result, job_status):
                 assert await page.locator('.message').count() == 0
                 assert await page.locator('.welcome').is_visible()
                 assert await page.get_by_role('dialog').count() == 0
-                assert await page.get_by_role('textbox', name='상품기획 요청').input_value() == ''
+                assert await page.get_by_role('textbox', name='패션 분석 요청').input_value() == ''
                 assert await page.get_by_label('분석 시즌',exact=True).count() == 0
                 assert report_fetches == []  # No old job lookup or SSE resubscription.
                 assert len(requests) == 1  # No duplicate generation on reload.

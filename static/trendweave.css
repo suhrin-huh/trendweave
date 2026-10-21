@@ -333,3 +333,10 @@ textarea::placeholder { color: #767676; }
   .preview { padding: 16px; }
   .review-fields { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* Selective research controls share the review form's typography. */
+.review-form select {width:100%;padding:12px;border:1px solid #d8d5cd;border-radius:8px;background:#fff;color:inherit;font:inherit;}
+.axis-picker {margin:16px 0;padding:12px;border:1px solid #d8d5cd;border-radius:8px;}
+.axis-picker label {display:block;margin:10px 0;}
+.axis-picker input[type="checkbox"] {width:auto;display:inline;margin-right:5px;}
+.axis-picker small {display:block;margin-left:24px;opacity:.7;}

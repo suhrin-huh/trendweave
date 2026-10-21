@@ -73,7 +73,7 @@ def test_conversation_continues_and_preserves_history(result, viewport):
                 await page.route('**/*',route_request)
                 await page.goto('http://localhost:8765/')
                 await page.wait_for_function("!document.querySelector('.example button').disabled")
-                textbox = page.get_by_role('textbox',name='상품기획 요청')
+                textbox = page.get_by_role('textbox',name='패션 분석 요청')
                 send = page.get_by_role('button',name='분석 방향 제안',exact=True)
                 await textbox.fill('첫 번째 상품기획 요청')
                 await textbox.press('Enter')

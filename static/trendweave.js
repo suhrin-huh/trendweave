@@ -13,7 +13,34 @@ createApp({setup() {
   let stream = null, poll = null, counter = 0, activeItem = null;
   const historyElements = new Map();
   const axisLabel = key => ({runway:'런웨이',color:'컬러',market:'시장',brand:'브랜드'}[key] || key);
-  const stepLabel = key => ({queued:'분석 대기',normalizer:'요청 정리',planner:'검색 계획',search:'자료 검색',grade:'문서 평가',rewrite:'재검색 계획',extract:'신호 추출',strategy:'전략 작성',critic:'전략 검토',report:'보고서 작성',completed:'분석 완료',failed:'분석 실패',error:'자료 수집 오류'}[key] || key);
+  const reportLabel = key => ({product_strategy:'상품기획 전략 보고서',styling:'코디 추천서',trend_analysis:'트렌드 분석서'}[key] || '상품기획 전략 보고서');
+  const qualityLabel = key => ({passed:'검토 통과',limited:'자료·결과 제한',review_required:'검토 필요'}[key] || '');
+  const allAxes = ['runway','color','market','brand'];
+  const requiredAxes = type => type==='product_strategy' ? allAxes : type==='styling' ? ['color','market'] : [];
+  function changeType(item) {
+    item.preview.selected_axes = item.preview.report_type==='product_strategy' ? [...allAxes] : item.preview.report_type==='styling' ? ['color','market'] : ['color'];
+    updateBrand(item);
+  }
+  function updateBrand(item) {item.preview.brand=item.preview.selected_axes.includes('brand') ? 'ZARA' : null;}
+  const reviewSignature = value => JSON.stringify([value.planning_request?.trim(),value.season?.trim(),value.report_direction?.trim()]);
+  const previewDirty = item => item.original !== reviewSignature(item.preview);
+  function receivePreview(item, data) {
+    item.preview=data; item.suggestedSeason=data.season; item.original=reviewSignature(data);
+    item.status=data.status==='pending' ? 'review' : 'blocked';
+    if(item.status==='blocked') pendingPreview.value=null;
+  }
+  async function replan(item) {
+    if(sending.value || item.status!=='review') return;
+    sending.value=true; item.status='replanning'; item.error='';
+    try {
+      await api(`/reports/preview/${item.preview.preview_id}/cancel`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({thread_id:thread})});
+      const data=await (await api('/reports/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        planning_request:item.preview.planning_request.trim(),thread_id:thread,season:item.preview.season.trim(),report_direction:item.preview.report_direction.trim()})})).json();
+      receivePreview(item,data);
+    } catch(error) {item.status='review';item.error=error.message;item.original='';}
+    finally {sending.value=false;scrollToLatest();if(item.status==='blocked') focusInput();}
+  }
+  const stepLabel = key => ({queued:'분석 대기',normalizer:'요청 정리',planner:'검색 계획',search:'자료 검색',grade:'문서 평가',rewrite:'재검색 계획',extract:'신호 추출',strategy:'보고서 초안',critic:'보고서 검토',report:'보고서 작성',completed:'분석 완료',failed:'분석 실패',error:'자료 수집 오류'}[key] || key);
   const statusLabel = status => ({queued:'준비 중',running:'분석 중',completed:'완료',failed:'생성 실패'}[status] || status);
   function setHistoryElement(id, el) {
     if (el) historyElements.set(id, el);
@@ -84,7 +111,7 @@ createApp({setup() {
     const data = await (await api(`/reports/${item.report_id}`)).json();
     const wasPending = item.status === 'queued' || item.status === 'running';
     const historyChanged = appendEvents(item, data.events);
-    Object.assign(item, {status:data.status, result:data.result, report_html:data.report_html, error:data.error, brand:data.result?.brand || data.result?.report?.brand || data.request?.brand || item.brand});
+    Object.assign(item, {status:data.status, result:data.result, report_html:data.report_html, error:data.error, brand:data.result?.brand ?? data.result?.report?.brand ?? data.request?.brand ?? null,report_type:data.result?.report_type || data.request?.report_type || 'product_strategy',selected_axes:data.result?.selected_axes || Object.keys(data.result?.research_results || {})});
     if (data.status === 'completed' || data.status === 'failed') {
       if (activeItem === item) {
         stopConnection(); activeItem=null; sending.value=false;
@@ -125,7 +152,7 @@ createApp({setup() {
   async function generate(request) {
     if(sending.value || pendingPreview.value || !ready.value || !request.trim()) return;
     sending.value=true;
-    messages.value.push({id:++counter,kind:'user',text:`${brand.value}\n${request}`});
+    messages.value.push({id:++counter,kind:'user',text:request});
     const item=reactive({id:++counter,kind:'preview',status:'planning',request,preview:null,suggestedSeason:'',error:''});
     messages.value.push(item); pendingPreview.value=item; input.value=''; scrollToLatest({force:true});
     let followPreview=false;
@@ -133,7 +160,7 @@ createApp({setup() {
       const data=await (await api('/reports/preview',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({planning_request:request,thread_id:thread})})).json();
       followPreview=nearBottom.value;
-      item.preview=data; item.suggestedSeason=data.season; item.status='review';
+      receivePreview(item,data);
     } catch(error) {
       item.status='error'; item.error=error.message; pendingPreview.value=null;
     } finally {
@@ -150,6 +177,8 @@ createApp({setup() {
   }
   async function approvePreview(item) {
     if(item.status!=='review' || sending.value) return;
+    if(previewDirty(item)) {item.error='내용을 수정했습니다. 제안 다시 받기를 눌러 주세요.';return;}
+    if(!item.preview.selected_axes.length) {item.error='조사 분야를 하나 이상 선택하세요.';return;}
     const match=/^(20\d{2})\s*(S\/?S|F\/?W)$/i.exec(item.preview.season.trim());
     if(!match || !item.preview.planning_request.trim() || !item.preview.report_direction.trim()) {
       item.error='시즌은 YYYY S/S 또는 YYYY F/W 형식으로 입력하고 요청과 보고서 방향을 채워 주세요.';
@@ -161,10 +190,12 @@ createApp({setup() {
       const response=await (await api('/reports',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({preview_id:item.preview.preview_id,approved:true,thread_id:thread,
           season:item.preview.season,brand:item.preview.brand,
+          report_type:item.preview.report_type,selected_axes:item.preview.selected_axes,
           planning_request:item.preview.planning_request.trim(),report_direction:item.preview.report_direction.trim()})})).json();
       item.status='approved'; pendingPreview.value=null;
       const report=newItem(item.preview.planning_request.trim(),item.preview.season);
       report.report_id=response.report_id; report.brand=item.preview.brand;
+      report.report_type=item.preview.report_type;report.selected_axes=[...item.preview.selected_axes];
       messages.value.push(report);scrollToLatest({force:true});connect(report);
     } catch(error) {item.status='review';item.error=error.message;sending.value=false;}
   }
@@ -193,7 +224,7 @@ createApp({setup() {
     try {
       const response=await api(`/reports/${item.report_id}/pdf`);
       const blob=await response.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
-      a.href=url; a.download=`TrendWeave_${item.brand}_${item.season.replace(/\W/g,'')}_${item.report_id}.pdf`;
+      a.href=url; a.download=`TrendWeave_${item.brand || item.report_type || "report"}_${item.season.replace(/\W/g,'')}_${item.report_id}.pdf`;
       document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
     } catch(error) {item.pdfError=error.message;} finally {item.downloading=false;}
   }
@@ -221,5 +252,5 @@ createApp({setup() {
     } catch {configurationError.value='분석 서버에 연결할 수 없습니다. 서버 실행 상태를 확인하고 새로고침해 주세요.';}
   });
   onBeforeUnmount(()=>{stopConnection();document.removeEventListener('keydown',modalKeys);});
-  return {brand,input,sending,ready,pendingPreview,approvePreview,cancelPreview,requestTime,configurationError,messages,selected,logEl,modalEl,inputEl,hasNewMessages,onConversationScroll,scrollToLatest,onInputKeydown,exampleRequest,axisLabel,stepLabel,statusLabel,setHistoryElement,toggleHistory,generate,submit,retry,reconnect,downloadPdf};
+  return {reportLabel,qualityLabel,allAxes,requiredAxes,changeType,updateBrand,previewDirty,replan,brand,input,sending,ready,pendingPreview,approvePreview,cancelPreview,requestTime,configurationError,messages,selected,logEl,modalEl,inputEl,hasNewMessages,onConversationScroll,scrollToLatest,onInputKeydown,exampleRequest,axisLabel,stepLabel,statusLabel,setHistoryElement,toggleHistory,generate,submit,retry,reconnect,downloadPdf};
 }}).mount('#app');

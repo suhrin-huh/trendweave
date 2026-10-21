@@ -71,8 +71,8 @@ def test_analysis_history_accumulates_and_can_be_folded(result, viewport):
                 await page.route('**/*',route_request)
                 await page.goto('http://localhost:8765/')
                 await page.wait_for_function("!document.querySelector('.example button').disabled")
-                await page.get_by_role('textbox',name='상품기획 요청').fill('누적 분석 과정 확인')
-                await page.get_by_role('textbox',name='상품기획 요청').press('Enter')
+                await page.get_by_role('textbox',name='패션 분석 요청').fill('누적 분석 과정 확인')
+                await page.get_by_role('textbox',name='패션 분석 요청').press('Enter')
                 await page.get_by_role('button',name='확인하고 보고서 생성').click()
                 await page.wait_for_function('testStreams.length===1')
                 first=page.locator('.message.report').nth(0)
@@ -141,8 +141,8 @@ def test_analysis_history_accumulates_and_can_be_folded(result, viewport):
                 await toggle.click()
 
                 # Each report keeps its own fold state and its own failed-job history.
-                await page.get_by_role('textbox',name='상품기획 요청').fill('두 번째 요청')
-                await page.get_by_role('textbox',name='상품기획 요청').press('Enter')
+                await page.get_by_role('textbox',name='패션 분석 요청').fill('두 번째 요청')
+                await page.get_by_role('textbox',name='패션 분석 요청').press('Enter')
                 await page.get_by_role('button',name='확인하고 보고서 생성').click()
                 await page.wait_for_function('testStreams.length===2')
                 statuses['history-2']='failed'

@@ -15,48 +15,59 @@
     <section class="intro">
       <div class="eyebrow">RESEARCH → INSIGHT → STRATEGY</div>
       <h1>다음 시즌의 가능성을,<br><em>하나의 전략으로.</em></h1>
-      <p>런웨이, 컬러, 시장, 브랜드의 신호를 엮어<br>근거를 확인할 수 있는 상품기획 보고서를 만듭니다.</p>
+      <p>런웨이, 컬러, 시장, 브랜드의 신호를 엮어<br>질문에 맞는 코디·트렌드·상품기획 보고서를 만듭니다.</p>
       <div class="axes"><span>01 런웨이</span><span>02 컬러</span><span>03 시장</span><span>04 브랜드</span></div>
       <aside class="example">
         <div class="eyebrow">TRY YOUR FIRST REPORT</div><h2>어떤 상품을 준비하면 좋을까요?</h2>
         <p>다가오는 시즌 {{ brand }}를 위해, 한국의 20~30대 고객이 일상에서 활용하기 쉬운 상품 중심으로 트렌드를 분석하고 상품기획 방향 3개를 제안해줘.</p>
         <button class="primary" :disabled="sending || pendingPreview || !ready" @click="generate(exampleRequest)">예시 질문으로 시작 <span>↗</span></button>
       </aside>
-      <p class="footnote">공개 웹 자료 기반 · {{ brand }} 4개 분야 종합 분석<br>분석 방향을 확인하고 승인하면 보고서를 생성합니다.</p>
+      <p class="footnote">공개 웹 자료 기반 · 패션 질문에 맞는 분야만 조사<br>분석 방향을 확인하고 승인하면 보고서를 생성합니다.</p>
     </section>
     <section class="workspace" aria-label="상품기획 대화">
       <div class="workspace-heading"><span class="status-dot"></span><strong>상품기획 리서치</strong><span>STRATEGY DESK</span></div>
       <div v-if="configurationError" class="notice error" role="alert">{{ configurationError }}</div>
       <div class="conversation-frame">
       <div class="conversation" ref="logEl" role="log" aria-label="대화 내역" aria-live="polite" @scroll.passive="onConversationScroll">
-        <div v-if="!messages.length" class="welcome"><div class="welcome-icon" aria-hidden="true">tw.</div><h2>무엇을 기획하고 있나요?</h2><p>상품기획 요청을 알려주세요.<br>시즌과 분석 방향을 제안하고, 승인 후 조사를 시작합니다.</p><div class="welcome-line"></div><small>예시 질문으로 첫 번째 보고서를 시작해 보세요.</small></div>
+        <div v-if="!messages.length" class="welcome"><div class="welcome-icon" aria-hidden="true">tw.</div><h2>무엇을 기획하고 있나요?</h2><p>코디·패션 트렌드·상품기획 요청을 알려주세요.<br>시즌과 분석 방향을 제안하고, 승인 후 조사를 시작합니다.</p><div class="welcome-line"></div><small>예시 질문으로 첫 번째 보고서를 시작해 보세요.</small></div>
         <article v-for="item in messages" :key="item.id" :class="['message', item.kind]">
           <template v-if="item.kind==='user'"><span class="message-author">나</span><div class="user-bubble">{{ item.text }}</div></template>
           <template v-else-if="item.kind==='preview'">
-            <div class="report-top"><span class="eyebrow">BEFORE THE RESEARCH</span><span class="pill">{{ item.status==='approved' ? '승인 완료' : item.status==='cancelled' ? '취소됨' : '방향 확인' }}</span></div>
-            <h3 :id="'review-heading-'+item.id" tabindex="-1">분석 방향을 확인해주세요</h3>
-            <p v-if="item.status==='planning'" class="progress"><span class="spinner"></span>요청 시점을 기준으로 시즌과 보고서 방향을 제안하고 있습니다.</p>
+            <div class="report-top"><span class="eyebrow">BEFORE THE RESEARCH</span><span class="pill">{{ item.status==='approved' ? '승인 완료' : item.status==='cancelled' ? '취소됨' : item.status==='blocked' ? '안내' : '방향 확인' }}</span></div>
+            <h3 :id="'review-heading-'+item.id" tabindex="-1">{{ item.status==='blocked' ? '패션 질문을 입력해주세요' : '분석 방향을 확인해주세요' }}</h3>
+            <p v-if="item.status==='planning'" class="progress"><span class="spinner"></span>패션 관련성을 확인하고 시즌과 보고서 방향을 제안하고 있습니다.</p>
             <template v-if="item.preview">
               <p class="review-time">요청 기준 {{ requestTime(item.preview.requested_at) }}</p>
-              <form v-if="['review','approving','cancelling'].includes(item.status)" class="review-form" @submit.prevent="approvePreview(item)">
+              <form v-if="['review','approving','cancelling','replanning'].includes(item.status)" class="review-form" @submit.prevent="approvePreview(item)">
                 <div class="review-fields">
                   <div><label :for="'review-season-'+item.id">분석 시즌</label><input :id="'review-season-'+item.id" v-model="item.preview.season" @keydown.enter.prevent maxlength="20" placeholder="YYYY S/S 또는 YYYY F/W" :disabled="item.status!=='review'" required></div>
-                  <div><label :for="'review-brand-'+item.id">분석 브랜드</label><input :id="'review-brand-'+item.id" :value="item.preview.brand" readonly><small>현재 서비스는 ZARA를 분석합니다.</small></div>
+                  <div><label :for="'review-brand-'+item.id">분석 브랜드</label><input :id="'review-brand-'+item.id" :value="item.preview.brand || '브랜드 조사 없음'" readonly><small>브랜드 조사는 ZARA를 지원합니다.</small></div>
                 </div>
                 <div class="review-reason"><span>LLM 제안 · {{ item.suggestedSeason }}</span><p>{{ item.preview.reason }}</p></div>
-                <label :for="'review-request-'+item.id">상품기획 요청 확인</label><textarea :id="'review-request-'+item.id" v-model="item.preview.planning_request" rows="3" maxlength="4000" :disabled="item.status!=='review'" required></textarea>
+                <label :for="'review-request-'+item.id">패션 분석 요청 확인</label><textarea :id="'review-request-'+item.id" v-model="item.preview.planning_request" rows="3" maxlength="4000" :disabled="item.status!=='review'" required></textarea>
                 <label :for="'review-direction-'+item.id">보고서 방향 확인</label><textarea :id="'review-direction-'+item.id" v-model="item.preview.report_direction" rows="3" maxlength="1500" :disabled="item.status!=='review'" required></textarea>
-                <p class="review-help">시즌과 요청·방향을 수정할 수 있습니다. 아래 버튼으로 승인하기 전에는 검색과 보고서 생성을 시작하지 않습니다.</p>
-                <div class="actions"><button class="primary" type="submit" :disabled="item.status!=='review'">{{ item.status==='approving' ? '분석 시작 중…' : '확인하고 보고서 생성' }}</button><button class="secondary" type="button" :disabled="item.status!=='review'" @click="cancelPreview(item)">생성 취소</button></div>
+                <label :for="'review-type-'+item.id">보고서 유형</label>
+                <select :id="'review-type-'+item.id" v-model="item.preview.report_type" @change="changeType(item)" :disabled="item.status!=='review'">
+                  <option value="styling">코디 추천서</option><option value="trend_analysis">트렌드 분석서</option><option value="product_strategy">상품기획 전략 보고서</option>
+                </select>
+                <fieldset class="axis-picker" :disabled="item.status!=='review'"><legend>조사 분야</legend>
+                  <label v-for="axis in allAxes" :key="axis"><input type="checkbox" :value="axis" v-model="item.preview.selected_axes" @change="updateBrand(item)" :disabled="requiredAxes(item.preview.report_type).includes(axis)"> {{ axisLabel(axis) }}{{ requiredAxes(item.preview.report_type).includes(axis) ? ' (필수)' : '' }}<small>{{ item.preview.axis_reasons?.[axis] || '사용자 선택 가능' }}</small></label>
+                </fieldset>
+                <p v-if="item.preview.assumptions?.length" class="review-help">가정: {{ item.preview.assumptions.join(' · ') }}</p>
+                <p class="review-help">질문·시즌·방향을 수정하면 제안을 다시 받아주세요. 승인 전에는 검색과 보고서 생성을 시작하지 않습니다.</p>
+                <p v-if="previewDirty(item)" class="notice">내용이 변경되었습니다. 패션 관련성과 분석 방향을 다시 확인해주세요.</p>
+                <div class="actions"><button v-if="previewDirty(item) || item.status==='replanning'" class="primary" type="button" :disabled="item.status!=='review'" @click="replan(item)">{{ item.status==='replanning' ? '제안 확인 중…' : '제안 다시 받기' }}</button><button class="primary" type="submit" :disabled="item.status!=='review' || previewDirty(item) || !item.preview.selected_axes.length">{{ item.status==='approving' ? '분석 시작 중…' : '확인하고 보고서 생성' }}</button><button class="secondary" type="button" :disabled="item.status!=='review'" @click="cancelPreview(item)">생성 취소</button></div>
               </form>
-              <div v-else class="review-summary"><p>{{ item.preview.season }} · {{ item.preview.brand }}</p><p>{{ item.preview.report_direction }}</p><small>{{ item.status==='approved' ? '확인한 내용으로 분석을 요청했습니다.' : '보고서 생성을 취소했습니다.' }}</small></div>
+              <p v-else-if="item.status==='blocked'" class="notice">{{ item.preview.message }}</p>
+              <div v-else class="review-summary"><p>{{ item.preview.season }} · {{ reportLabel(item.preview.report_type) }}{{ item.preview.brand ? ' · '+item.preview.brand : '' }}</p><p>{{ item.preview.report_direction }}</p><small>{{ item.status==='approved' ? '확인한 내용으로 분석을 요청했습니다.' : '보고서 생성을 취소했습니다.' }}</small></div>
             </template>
             <p v-if="item.error" class="notice error" role="alert">{{ item.error }}</p>
             <button v-if="item.status==='error'" class="secondary" :disabled="sending || pendingPreview || !ready" @click="generate(item.request)">분석 방향 다시 제안받기</button>
           </template>
           <template v-else>
             <div class="report-top"><span class="eyebrow">TRENDWEAVE REPORT</span><span class="pill">{{ statusLabel(item.status) }}</span></div>
-            <h3>{{ item.season }} · {{ item.brand }}</h3>
+            <h3>{{ item.season }} · {{ reportLabel(item.report_type) }}{{ item.brand ? ' · '+item.brand : '' }}</h3>
+            <p v-if="item.selected_axes?.length" class="review-help">조사 분야: {{ item.selected_axes.map(axisLabel).join(' · ') }}</p>
             <div v-if="item.status==='queued' || item.status==='running'" class="progress"><span class="spinner"></span>{{ item.latest || '분석을 준비하고 있습니다.' }}</div>
             <div v-if="item.connectionMessage" class="notice">{{ item.connectionMessage }} <button class="text-button" @click="reconnect(item)">상태 다시 확인</button></div>
             <section class="activity" aria-label="누적 분석 과정">
@@ -75,6 +86,7 @@
             </section>
             <template v-if="item.status==='completed'">
               <p class="summary">{{ item.result.report.executive_summary }}</p>
+              <p v-if="item.result.quality_status" class="notice">결과 품질: {{ qualityLabel(item.result.quality_status) }}</p>
               <div class="quality"><span v-for="(axis,key) in item.result.research_results" :key="key">{{ axisLabel(key) }} <b>{{ axis.confidence }}</b></span></div>
               <p v-if="!item.result.critique.passed || !item.result.critique.llm_reviewed" class="notice">검토 필요: {{ !item.result.critique.llm_reviewed ? 'LLM 검토를 완료하지 못해 규칙 검사만 적용했습니다.' : '수정 한도에 도달한 검토 사항이 있습니다.' }} 전체 보고서의 Review Notes를 확인하세요.</p>
               <div class="actions"><button class="primary" @click="selected=item">전체 보고서 보기 ↗</button><button class="secondary" :disabled="item.downloading" @click="downloadPdf(item)">{{ item.downloading ? 'PDF 만드는 중…' : 'PDF 다운로드 ↓' }}</button></div>
@@ -87,16 +99,16 @@
       <button v-if="hasNewMessages" class="latest-message" type="button" @click="scrollToLatest({force: true})">최신 대화로 이동 ↓</button>
       </div>
       <form class="composer" @submit.prevent="submit">
-        <div class="composer-meta"><span class="automatic-season">시즌 자동 제안 · 사용자 확인 후 분석</span><span>브랜드 {{ brand }} · 4개 분야 전체 조사</span></div>
-        <div class="input-row"><textarea ref="inputEl" v-model="input" aria-label="상품기획 요청" :placeholder="messages.length ? '다음 상품기획 요청을 입력하세요.' : '예: 데님 상품군 중심으로, 가벼운 여름 소재 위주로 기획해줘.'" rows="2" maxlength="4000" @keydown="onInputKeydown"></textarea><button class="send" type="submit" :disabled="sending || pendingPreview || !ready || !input.trim()" aria-label="분석 방향 제안">↗</button></div>
+        <div class="composer-meta"><span class="automatic-season">시즌 자동 제안 · 사용자 확인 후 분석</span><span>코디 · 트렌드 · ZARA 상품기획</span></div>
+        <div class="input-row"><textarea ref="inputEl" v-model="input" aria-label="패션 분석 요청" :placeholder="messages.length ? '다음 패션 질문을 입력하세요.' : '예: 데님 상품군 중심으로, 가벼운 여름 소재 위주로 기획해줘.'" rows="2" maxlength="4000" @keydown="onInputKeydown"></textarea><button class="send" type="submit" :disabled="sending || pendingPreview || !ready || !input.trim()" aria-label="분석 방향 제안">↗</button></div>
         <small>{{ pendingPreview ? '분석 방향을 확인하고 승인하거나 취소해주세요. 다음 요청의 초안을 작성할 수 있습니다.' : sending ? '분석 중에도 다음 요청을 작성할 수 있습니다. 완료 후 전송할 수 있습니다.' : 'Enter로 방향 제안 요청 · Shift+Enter로 줄바꿈 · 보고서 생성 전 확인합니다.' }}</small>
       </form>
     </section>
   </main>
 </div>
   <div v-if="selected" class="modal-backdrop" @click.self="selected=null" @keydown.esc="selected=null">
-    <section class="report-modal" role="dialog" aria-modal="true" aria-label="전체 상품기획 보고서" tabindex="-1" ref="modalEl">
-      <div class="modal-toolbar"><strong>{{ selected.season }} · {{ selected.brand }}</strong><div><button class="secondary" :disabled="selected.downloading" @click="downloadPdf(selected)">{{ selected.downloading ? 'PDF 만드는 중…' : 'PDF 다운로드 ↓' }}</button><button class="close" @click="selected=null" aria-label="보고서 닫기">×</button></div></div>
+    <section class="report-modal" role="dialog" aria-modal="true" aria-label="전체 패션 분석 보고서" tabindex="-1" ref="modalEl">
+      <div class="modal-toolbar"><strong>{{ selected.season }} · {{ reportLabel(selected.report_type) }}{{ selected.brand ? ' · '+selected.brand : '' }}</strong><div><button class="secondary" :disabled="selected.downloading" @click="downloadPdf(selected)">{{ selected.downloading ? 'PDF 만드는 중…' : 'PDF 다운로드 ↓' }}</button><button class="close" @click="selected=null" aria-label="보고서 닫기">×</button></div></div>
       <p v-if="selected.pdfError" class="notice error">{{ selected.pdfError }}</p>
       <div class="report-body" v-html="selected.report_html"></div>
     </section>
