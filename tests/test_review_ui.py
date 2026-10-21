@@ -43,7 +43,7 @@ def test_review_must_be_approved_before_report(viewport):
                 await page.route('**/*',handle)
                 await page.goto('http://localhost:8765/')
                 await page.wait_for_function("!document.querySelector('.example button').disabled")
-                assert await page.get_by_label('분석 시즌',exact=True).count()==0
+                assert await page.get_by_label('런웨이 시즌',exact=True).count()==0
                 textbox=page.get_by_role('textbox',name='패션 분석 요청',exact=True)
                 send=page.get_by_role('button',name='분석 방향 제안',exact=True)
                 await textbox.fill('다가오는 여름 데님 상품을 기획해줘.')
@@ -53,10 +53,10 @@ def test_review_must_be_approved_before_report(viewport):
                 assert len(previews)==1 and len(approvals)==0
                 assert set(previews[0])=={'planning_request','thread_id'}
                 assert await page.locator('.message.report').count()==0
-                await expect(page.get_by_label('분석 시즌',exact=True)).to_have_value('2027 S/S')
-                brand=page.get_by_label('분석 브랜드',exact=True)
+                await expect(page.get_by_label('런웨이 시즌',exact=True)).to_have_value('2027 S/S')
+                brand=page.get_by_label('브랜드 범위',exact=True)
                 assert await brand.input_value()=='ZARA'
-                assert await brand.get_attribute('readonly') is not None
+                assert await brand.is_enabled()
                 await expect(page.locator('.review-time')).to_contain_text('2026-10-21 10:30 (한국시간)')
                 await textbox.fill('다음 요청의 초안')
                 await expect(send).to_be_disabled()
@@ -69,7 +69,7 @@ def test_review_must_be_approved_before_report(viewport):
                 await expect(page.locator('.review-summary')).to_contain_text('보고서 생성을 취소')
                 await textbox.press('Enter')
                 await expect(approve).to_be_enabled()
-                season=page.get_by_label('분석 시즌',exact=True)
+                season=page.get_by_label('런웨이 시즌',exact=True)
                 await season.fill('2028 FW')
                 await season.press('Enter')
                 assert len(approvals)==0  # Editing a field is not approval.
@@ -87,7 +87,7 @@ def test_review_must_be_approved_before_report(viewport):
                 await expect(page.locator('.message.report')).to_have_count(1)
                 assert len(approvals)==1
                 assert approvals[0]['approved'] is True
-                assert approvals[0]['season']=='2028 F/W'
+                assert approvals[0]['runway_season']=='2028 F/W'
                 assert approvals[0]['brand']=='ZARA'
                 assert approvals[0]['preview_id']=='proposal-3'
                 assert approvals[0]['planning_request']=='린넨 셔츠 중심으로 기획해줘.'
@@ -131,7 +131,7 @@ def test_review_errors_preserve_edits_and_reload_resets():
                 await expect(page.locator('.notice.error')).to_contain_text('제안 실패')
                 assert approvals==[]
                 await page.get_by_role('button',name='분석 방향 다시 제안받기').click()
-                season=page.get_by_label('분석 시즌',exact=True)
+                season=page.get_by_label('런웨이 시즌',exact=True)
                 await season.fill('2029 S/S')
                 await page.get_by_label('보고서 방향 확인').fill('수정한 방향')
                 await page.get_by_role('button',name='제안 다시 받기',exact=True).click()

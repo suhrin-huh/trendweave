@@ -34,9 +34,11 @@ def test_domain_gate_and_selected_fields_in_browser(width):
                                 'message':'패션 관련 질문만 도와드릴 수 있어요.','requested_at':'2026-10-21T10:30:00+09:00'})
                         else:
                             await route.fulfill(json={'status':'pending','domain_status':'fashion','preview_id':'styling',
-                                'season':'2027 S/S','brand':None,'report_type':'styling','selected_axes':['color','market'],
+                                'runway_season':None,'wearing_season':'여름','brand':request.post_data_json.get('brand'),'report_type':request.post_data_json.get('report_type','styling'),'selected_axes':request.post_data_json.get('selected_axes',['color','market']),
                                 'axis_reasons':{'color':'컬러 조합 확인','market':'현재 스타일 확인'},'reason':'출근 코디 제안',
                                 'planning_request':question,'report_direction':'여름 출근 코디 추천','requested_at':'2026-10-21T10:30:00+09:00'})
+                    elif path.endswith('/cancel'):
+                        await route.fulfill(json={'status':'cancelled'})
                     elif path=='/reports':
                         approvals.append(request.post_data_json)
                         await route.fulfill(status=202,json={'report_id':'selected','status':'queued'})
@@ -56,10 +58,12 @@ def test_domain_gate_and_selected_fields_in_browser(width):
                 await textbox.fill('여름 출근용 데님 코디 추천')
                 await textbox.press('Enter')
                 await expect(page.get_by_label('보고서 유형',exact=True)).to_have_value('styling')
-                await expect(page.get_by_label('분석 브랜드',exact=True)).to_have_value('브랜드 조사 없음')
+                await expect(page.get_by_label('브랜드 범위',exact=True)).to_have_value('브랜드 제한 없음')
                 assert await page.get_by_role('checkbox',name='컬러',exact=False).is_disabled()
                 assert await page.get_by_role('checkbox',name='시장',exact=False).is_disabled()
+                assert await page.get_by_label('런웨이 시즌',exact=True).count()==0
                 await page.get_by_role('checkbox',name='런웨이',exact=False).check()
+                await expect(page.get_by_label('런웨이 시즌',exact=True)).to_be_visible()
                 await page.get_by_label('보고서 유형',exact=True).select_option('trend_analysis')
                 await expect(page.get_by_role('checkbox',name='컬러',exact=False)).to_be_checked()
                 assert not await page.get_by_role('checkbox',name='시장',exact=False).is_checked()
@@ -71,6 +75,9 @@ def test_domain_gate_and_selected_fields_in_browser(width):
                 artifacts=ROOT/'.artifacts/selective-ui'
                 artifacts.mkdir(parents=True,exist_ok=True)
                 await page.screenshot(path=str(artifacts/f'{width}.png'),full_page=True)
+                await expect(page.get_by_role('button',name='확인하고 보고서 생성')).to_be_disabled()
+                await page.get_by_role('button',name='제안 다시 받기',exact=True).click()
+                await expect(page.get_by_role('button',name='확인하고 보고서 생성')).to_be_enabled()
                 await page.get_by_role('button',name='확인하고 보고서 생성').click()
                 await expect(page.locator('.message.report')).to_have_count(1)
                 assert len(approvals)==1 and approvals[0]['selected_axes']==['color']

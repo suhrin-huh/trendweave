@@ -1,6 +1,6 @@
 const {createApp, ref, reactive, nextTick, watch, onMounted, onBeforeUnmount} = Vue;
 createApp({setup() {
-  const exampleRequest = '한국의 20-30대 고객이 일상에서 활용하기 쉬운 상품 중심으로 런웨이·컬러·시장·브랜드 트렌드를 분석하고 상품기획 방향 3개를 제안해줘.';
+  const exampleRequest = 'ZARA를 대상으로 한국의 20-30대 고객이 일상에서 활용하기 쉬운 상품 중심으로 런웨이·컬러·시장·브랜드 트렌드를 분석하고 상품기획 방향 3개를 제안해줘.';
   const brand = ref('ZARA');
   const input = ref(''), sending = ref(false), ready = ref(false), pendingPreview = ref(null);
   const configurationError = ref(''), messages = ref([]), selected = ref(null), logEl = ref(null), modalEl = ref(null), inputEl = ref(null);
@@ -16,16 +16,16 @@ createApp({setup() {
   const reportLabel = key => ({product_strategy:'상품기획 전략 보고서',styling:'코디 추천서',trend_analysis:'트렌드 분석서'}[key] || '상품기획 전략 보고서');
   const qualityLabel = key => ({passed:'검토 통과',limited:'자료·결과 제한',review_required:'검토 필요'}[key] || '');
   const allAxes = ['runway','color','market','brand'];
-  const requiredAxes = type => type==='product_strategy' ? allAxes : type==='styling' ? ['color','market'] : [];
+  const requiredAxes = type => type==='styling' ? ['color','market'] : [];
   function changeType(item) {
-    item.preview.selected_axes = item.preview.report_type==='product_strategy' ? [...allAxes] : item.preview.report_type==='styling' ? ['color','market'] : ['color'];
+    item.preview.selected_axes = item.preview.report_type==='product_strategy' ? (item.preview.brand ? [...allAxes] : ['runway','color','market']) : item.preview.report_type==='styling' ? ['color','market'] : ['color'];
     updateBrand(item);
   }
-  function updateBrand(item) {item.preview.brand=item.preview.selected_axes.includes('brand') ? 'ZARA' : null;}
-  const reviewSignature = value => JSON.stringify([value.planning_request?.trim(),value.season?.trim(),value.report_direction?.trim()]);
+  function updateBrand(item) {if(!item.preview.selected_axes.includes('runway')) item.preview.runway_season=null;}
+  const reviewSignature = value => JSON.stringify([value.planning_request?.trim(),value.runway_season?.trim() || null,value.report_direction?.trim(),value.brand || null,value.report_type,value.selected_axes]);
   const previewDirty = item => item.original !== reviewSignature(item.preview);
   function receivePreview(item, data) {
-    item.preview=data; item.suggestedSeason=data.season; item.original=reviewSignature(data);
+    item.preview=data; item.suggestedSeason=data.runway_season; item.original=reviewSignature(data);
     item.status=data.status==='pending' ? 'review' : 'blocked';
     if(item.status==='blocked') pendingPreview.value=null;
   }
@@ -35,7 +35,7 @@ createApp({setup() {
     try {
       await api(`/reports/preview/${item.preview.preview_id}/cancel`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({thread_id:thread})});
       const data=await (await api('/reports/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        planning_request:item.preview.planning_request.trim(),thread_id:thread,season:item.preview.season.trim(),report_direction:item.preview.report_direction.trim()})})).json();
+        planning_request:item.preview.planning_request.trim(),thread_id:thread,runway_season:item.preview.runway_season?.trim() || null,report_direction:item.preview.report_direction.trim(),brand:item.preview.brand,report_type:item.preview.report_type,selected_axes:item.preview.selected_axes})})).json();
       receivePreview(item,data);
     } catch(error) {item.status='review';item.error=error.message;item.original='';}
     finally {sending.value=false;scrollToLatest();if(item.status==='blocked') focusInput();}
@@ -111,7 +111,7 @@ createApp({setup() {
     const data = await (await api(`/reports/${item.report_id}`)).json();
     const wasPending = item.status === 'queued' || item.status === 'running';
     const historyChanged = appendEvents(item, data.events);
-    Object.assign(item, {status:data.status, result:data.result, report_html:data.report_html, error:data.error, brand:data.result?.brand ?? data.result?.report?.brand ?? data.request?.brand ?? null,report_type:data.result?.report_type || data.request?.report_type || 'product_strategy',selected_axes:data.result?.selected_axes || Object.keys(data.result?.research_results || {})});
+    Object.assign(item, {status:data.status, result:data.result, report_html:data.report_html, error:data.error, brand:data.result?.brand ?? data.result?.report?.brand ?? data.request?.brand ?? null,runway_season:data.result?.runway_season || data.request?.runway_season || data.request?.season || null,analysis_date:data.request?.requested_at?.slice(0,10) || '',report_type:data.result?.report_type || data.request?.report_type || 'product_strategy',selected_axes:data.result?.selected_axes || Object.keys(data.result?.research_results || {})});
     if (data.status === 'completed' || data.status === 'failed') {
       if (activeItem === item) {
         stopConnection(); activeItem=null; sending.value=false;
@@ -147,7 +147,7 @@ createApp({setup() {
     poll=setInterval(async () => {try {await refresh(item);} catch {item.connectionMessage='서버 연결을 확인해 주세요.';}}, 5000);
   }
   function newItem(request, reportSeason) {
-    return reactive({id:++counter,kind:'report',brand:brand.value,season:reportSeason,request,status:'queued',events:[],historyExpanded:true,lastEventId:0,latest:'',connectionMessage:'',result:null,report_html:'',error:'',downloading:false,pdfError:''});
+    return reactive({id:++counter,kind:'report',brand:null,runway_season:reportSeason,analysis_date:'',request,status:'queued',events:[],historyExpanded:true,lastEventId:0,latest:'',connectionMessage:'',result:null,report_html:'',error:'',downloading:false,pdfError:''});
   }
   async function generate(request) {
     if(sending.value || pendingPreview.value || !ready.value || !request.trim()) return;
@@ -179,22 +179,25 @@ createApp({setup() {
     if(item.status!=='review' || sending.value) return;
     if(previewDirty(item)) {item.error='내용을 수정했습니다. 제안 다시 받기를 눌러 주세요.';return;}
     if(!item.preview.selected_axes.length) {item.error='조사 분야를 하나 이상 선택하세요.';return;}
-    const match=/^(20\d{2})\s*(S\/?S|F\/?W)$/i.exec(item.preview.season.trim());
-    if(!match || !item.preview.planning_request.trim() || !item.preview.report_direction.trim()) {
-      item.error='시즌은 YYYY S/S 또는 YYYY F/W 형식으로 입력하고 요청과 보고서 방향을 채워 주세요.';
-      return;
+    const hasRunway=item.preview.selected_axes.includes('runway');
+    const match=/^(20\d{2})\s*(S\/?S|F\/?W)$/i.exec(item.preview.runway_season?.trim() || '');
+    if((hasRunway && !match) || !item.preview.planning_request.trim() || !item.preview.report_direction.trim()) {
+      item.error='요청과 방향을 채우고, 런웨이 조사 시 YYYY S/S 또는 YYYY F/W 시즌을 확인해주세요.';return;
     }
-    item.preview.season=`${match[1]} ${match[2].toUpperCase().startsWith('S')?'S/S':'F/W'}`;
+    if(item.preview.selected_axes.includes('brand') && !item.preview.brand) {
+      item.error='브랜드 조사 대상을 선택하고 제안을 다시 받아주세요.';return;
+    }
+    item.preview.runway_season=hasRunway ? `${match[1]} ${match[2].toUpperCase().startsWith('S')?'S/S':'F/W'}` : null;
     item.status='approving'; item.error=''; sending.value=true;
     try {
       const response=await (await api('/reports',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({preview_id:item.preview.preview_id,approved:true,thread_id:thread,
-          season:item.preview.season,brand:item.preview.brand,
+          runway_season:item.preview.runway_season,brand:item.preview.brand,
           report_type:item.preview.report_type,selected_axes:item.preview.selected_axes,
           planning_request:item.preview.planning_request.trim(),report_direction:item.preview.report_direction.trim()})})).json();
       item.status='approved'; pendingPreview.value=null;
-      const report=newItem(item.preview.planning_request.trim(),item.preview.season);
-      report.report_id=response.report_id; report.brand=item.preview.brand;
+      const report=newItem(item.preview.planning_request.trim(),item.preview.runway_season);
+      report.report_id=response.report_id; report.brand=item.preview.brand;report.analysis_date=item.preview.requested_at?.slice(0,10) || '';
       report.report_type=item.preview.report_type;report.selected_axes=[...item.preview.selected_axes];
       messages.value.push(report);scrollToLatest({force:true});connect(report);
     } catch(error) {item.status='review';item.error=error.message;sending.value=false;}
@@ -224,7 +227,7 @@ createApp({setup() {
     try {
       const response=await api(`/reports/${item.report_id}/pdf`);
       const blob=await response.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
-      a.href=url; a.download=`TrendWeave_${item.brand || item.report_type || "report"}_${item.season.replace(/\W/g,'')}_${item.report_id}.pdf`;
+      a.href=url; a.download=`TrendWeave_${item.brand || item.report_type || "report"}_${(item.runway_season || item.analysis_date || 'report').replace(/\W/g,'')}_${item.report_id}.pdf`;
       document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
     } catch(error) {item.pdfError=error.message;} finally {item.downloading=false;}
   }

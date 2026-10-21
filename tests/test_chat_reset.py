@@ -70,7 +70,7 @@ def test_reload_starts_new_conversation(result, job_status):
                 await page.wait_for_function("!document.querySelector('.example button').disabled")
                 assert await page.locator('.message').count() == 0
                 await button.click()
-                await page.get_by_label('분석 시즌',exact=True).fill('2027 F/W')
+                await page.get_by_label('런웨이 시즌',exact=True).fill('2027 F/W')
                 await page.get_by_role('button',name='제안 다시 받기',exact=True).click()
                 await page.get_by_role('button',name='확인하고 보고서 생성').click()
                 await page.locator('.message.report').wait_for()
@@ -95,7 +95,7 @@ def test_reload_starts_new_conversation(result, job_status):
                 assert await page.locator('.welcome').is_visible()
                 assert await page.get_by_role('dialog').count() == 0
                 assert await page.get_by_role('textbox', name='패션 분석 요청').input_value() == ''
-                assert await page.get_by_label('분석 시즌',exact=True).count() == 0
+                assert await page.get_by_label('런웨이 시즌',exact=True).count() == 0
                 assert report_fetches == []  # No old job lookup or SSE resubscription.
                 assert len(requests) == 1  # No duplicate generation on reload.
                 assert await page.evaluate("sessionStorage.getItem('trendweave-active')") is None
