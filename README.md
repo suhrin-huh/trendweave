@@ -1,3 +1,114 @@
+# TrendWeave · 패션 트렌드 상품기획 에이전트
+
+기존 Vue 채팅·FastAPI 서비스를 바탕으로 `reference/AI_Agent_설계_trendweave.ipynb`를 웹서비스로 이식했습니다. UNIQLO를 대상으로 런웨이·컬러·시장·브랜드를 모두 조사하고 상품기획 방향 3개를 제안합니다.
+
+## 실행
+
+Python 3.11 이상을 사용하세요. 최초 설치:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m playwright install chromium
+cp .env.example .env
+```
+
+이미 `.env`가 있다면 덮어쓰지 말고 필요한 항목을 추가하세요.
+
+```dotenv
+SERVICE_MODE=trendweave
+GOOGLE_API_KEY=본인의_Gemini_API_키
+TAVILY_API_KEY=본인의_Tavily_API_키
+TREND_MODEL=gemini-3.1-flash-lite
+TREND_REQUESTS_PER_SECOND=0.25
+TREND_MAX_WORKERS=1
+TREND_SEARCH_TIMEOUT=30
+```
+
+모델 ID는 노트북 기준이며 설정으로 교체할 수 있습니다. 실제 서비스 실행에는 Gemini와 Tavily의 유효한 키가 모두 필요합니다. 호출 한도는 계정에 맞게 조정하세요. 분석 및 검증 스크립트는 실제 외부 API를 호출합니다.
+
+```bash
+./run.sh
+```
+
+브라우저에서 <http://localhost:8600>을 엽니다. API는 `127.0.0.1:8100`에서 실행합니다. 종료는 `Control + C`입니다.
+
+## 사용 방법
+
+1. 분석 시즌을 선택합니다. 기본값은 `2027 S/S`, 브랜드는 UNIQLO입니다.
+2. **예시 질문으로 보고서 생성**을 클릭하면 바로 분석이 시작됩니다. 자유 입력 요청도 같은 4축 분석으로 실행됩니다.
+3. 진행 기록에서 분야별 검색·재검색·추출, 전략 작성·검토를 확인합니다. 처리 시간은 약 2~4분 이상이며 호출 한도에 따라 늘어날 수 있습니다.
+4. 완료 후 요약과 분야별 자료 충분도를 확인하고 **전체 보고서 보기**를 엽니다.
+5. **PDF 다운로드**로 동일한 최종 보고서를 저장합니다. 한국어 글꼴, 전체 검토 기록과 참고 자료가 포함됩니다.
+
+현재 탭은 마지막 작업 ID를 세션 저장소에 보관합니다. 생성 중 새로고침하면 동일 작업에 다시 연결하며, 완료된 마지막 보고서도 새로고침 후 복원합니다. 새 요청은 독립적인 분석입니다.
+
+## 동작 구조
+
+```text
+Vue 채팅 → 8600 동일 출처 프록시 → 8100 FastAPI
+          POST /reports → 작업 ID → 백그라운드 LangGraph
+          GET /reports/{id}/events → SSE 진행 상태
+          GET /reports/{id} → 저장된 결과와 정제된 HTML
+          GET /reports/{id}/pdf → 저장 Markdown → HTML → Chromium PDF
+
+정규화 → Planner → Send ×4 Research → Strategy ↔ Critic → Report Builder
+                   검색 → Grade → Rewrite / Extract
+```
+
+`agent/trendweave/`는 노트북의 스키마·State·축 설정·그래프를 포함합니다. `engine.py`는 원본 프롬프트와 규칙을 유지하며, `deps.py`에서 시작 시 모델을 주입합니다. `search.py`는 Tavily의 동기 호출에 명시적인 HTTP timeout을 적용합니다.
+
+`services/`는 SQLite 작업·이벤트 저장, 제한된 작업 스레드 실행, API, Markdown 정제·PDF 변환을 담당합니다. 기본 DB는 `reports.db`이고 `REPORT_DB_PATH`로 바꿀 수 있습니다. 서버 재시작 시 미완료 작업은 실패로 정리하고 완료 결과는 유지합니다. `static/`의 Vue와 PDF 글꼴은 로컬 자원이며 라이선스 파일을 함께 포함했습니다.
+
+### 생성 요청 예
+
+```bash
+curl -X POST http://127.0.0.1:8100/reports \
+  -H 'Content-Type: application/json' \
+  -d '{"season":"2027 S/S","planning_request":"한국 20-30대 고객의 일상 상품을 기획해줘.","thread_id":"demo"}'
+```
+
+반환된 `report_id`로 조회합니다. 생성은 `202`, 키 설정 미완료는 `503`, 입력 오류는 `422`, 대기 한도 초과는 `429`입니다. 존재하지 않는 보고서는 `404`, 완료 전 PDF 요청은 `409`입니다.
+
+## 검증
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest -m 'not browser' -q
+.venv/bin/python -m pytest -m browser -q
+```
+
+`not browser` 테스트는 실제 외부 API 없이 그래프·규칙·작업 저장·API·오류 처리를 검증합니다. `browser` 테스트는 설치된 Chromium으로 한국어 PDF를 생성하고 내용을 확인합니다.
+
+실제 API 통합 검증은 필요할 때 별도로 실행합니다.
+
+```bash
+.venv/bin/python scripts/verify_live.py
+.venv/bin/python scripts/verify_browser.py
+```
+
+`verify_live.py`는 실제 4축 분석을 수행합니다. `verify_browser.py`는 8100·8600 서버를 실행하고 실제 화면에서 예시 질문을 클릭한 뒤 새로고침 복구·보고서 보기·PDF 다운로드·모바일 레이아웃까지 검증하고 서버를 종료합니다. `--reuse-last` 옵션을 추가하면 마지막 완료 보고서의 복원·PDF를 외부 분석 재호출 없이 확인합니다. 두 포트가 비어 있어야 합니다. PDF·스크린샷·결과는 Git에서 제외된 `.artifacts/`에 저장됩니다.
+
+## 구현 범위와 한계
+
+- 1차 범위인 UNIQLO 고정 4축 조사, 요청 반영, 재검색, 전략 3개, 검토·재작성, 웹 보고서, PDF 다운로드를 구현했습니다.
+- 검색 총 3회/축, 추출 최대 6개 문서/축, 전략 재작성 최대 2회로 제한합니다. 자료 부족 및 검토 한도 도달은 보고서에 표시합니다. 모든 축의 자료 수집이 실패하면 작업을 실패 처리합니다.
+- 한 프로세스의 로컬 데모용입니다. 기본 동시 분석은 1개이며 실행·대기 작업은 합계 3개까지 허용합니다. 완료 DB는 유지하지만 서버 재시작 후 미완료 분석을 자동 재개하지 않습니다.
+- 문서 검색 결과의 텍스트 일부를 사용하며 신뢰도는 자료 충분도를 뜻합니다. 판매·재고·마진을 분석한 결과가 아닙니다.
+- 질문별 선택적 분석, 동적 보고서 형식, 다른 브랜드, 대화 문맥 기반 후속 분석, 계정별 보고서 목록은 구현하지 않았습니다.
+
+## 참고한 공식 문서
+
+- [LangChain Google GenAI 구조화 출력](https://reference.langchain.com/python/langchain-google-genai/chat_models/ChatGoogleGenerativeAI/with_structured_output)
+- [Playwright PDF API](https://playwright.dev/python/docs/api/class-page#page-pdf)
+- [Tavily Search API](https://docs.tavily.com/documentation/api-reference/endpoint/search)
+
+---
+
+# 기존 베이스코드 문서 (운영 장애 대응 실습)
+
+아래 내용은 기존 실습용 코드의 설명입니다. 기본 웹 화면은 TrendWeave이며, 기존 장애 대응 API를 사용할 때는 `SERVICE_MODE=incident`와 기존 `LLM_BACKEND` 설정을 사용하세요.
+
 # AI Agent 종합실습 — 실행 및 과제 가이드 (macOS)
 
 이 실습은 **아래 두 과제 중 하나를 선택**하여 진행합니다.
