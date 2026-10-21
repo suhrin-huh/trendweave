@@ -235,7 +235,7 @@ def research_planner(state: TrendState) -> dict:
         planner_note = "요청 해석 완료"
     except Exception as error:
         plan = fallback_research_plan(state)
-        planner_note = f"Planner 실패로 템플릿 검색어 사용 ({error})"
+        planner_note = f"Planner 실패로 템플릿 검색어 사용 (외부 도구 호출 실패)"
 
     templates = build_research_queries(state["season"], state["brand"], state["today"])
     research_plan = {}
@@ -740,7 +740,7 @@ def run_research(state: dict) -> dict:
         )
         return {
             "research_results": {axis: result},
-            "trace": [trace_event("error", f"Research 실패, 빈 결과로 진행 ({error})", axis)],
+            "trace": [trace_event("error", f"Research 실패, 빈 결과로 진행 (외부 도구 호출 실패)", axis)],
         }
 
 import json

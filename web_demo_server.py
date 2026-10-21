@@ -17,12 +17,14 @@ from pathlib import Path
 import httpx
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, Response
 
 BACKEND = "http://127.0.0.1:8100"
 HERE = Path(__file__).parent
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
 
 @app.get("/")
