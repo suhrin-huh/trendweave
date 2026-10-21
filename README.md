@@ -1,6 +1,6 @@
 # TrendWeave · 패션 트렌드 상품기획 에이전트
 
-기존 Vue 채팅·FastAPI 서비스를 바탕으로 `reference/AI_Agent_설계_trendweave.ipynb`를 웹서비스로 이식했습니다. ZARA를 대상으로 런웨이·컬러·시장·브랜드를 모두 조사하고 상품기획 방향 3개를 제안합니다.
+기존 Vue 채팅·FastAPI 서비스를 바탕으로 `reference/AI_Agent_설계_trendweave.ipynb`를 웹서비스로 이식했습니다. 패션 질문을 분류해 필요한 분야만 조사하고 코디 추천서·트렌드 분석서·ZARA 상품기획 전략 보고서를 생성합니다. 비패션 질문에는 지원 범위만 안내합니다.
 
 ## 실행
 
@@ -35,13 +35,13 @@ TREND_SEARCH_TIMEOUT=30
 
 ## 사용 방법
 
-1. **예시 질문으로 시작**을 누르거나 상품기획 요청을 입력합니다. 입력창에서 시즌을 미리 선택할 필요는 없습니다.
-2. LLM이 서버에 기록된 요청 시각(한국시간)과 질문을 바탕으로 시즌과 보고서 방향을 제안합니다. 질문에 명시한 시즌을 우선합니다.
-3. **분석 방향을 확인해주세요** 카드에서 요청 기준 시각·제안 이유·시즌·고정 브랜드 ZARA·요청·보고서 방향을 확인합니다. 시즌·요청·방향은 수정할 수 있습니다.
-4. **확인하고 보고서 생성**을 눌러야 실제 4축 검색과 분석을 시작합니다. **생성 취소**를 누르면 보고서는 생성하지 않습니다. 제안 중에는 LLM만 호출하며 외부 검색은 실행하지 않습니다.
-5. **분석 과정**에는 분야별 검색·평가·재검색·추출과 전략 작성·검토가 순서대로 누적됩니다. 기본으로 펼쳐 표시하며, **접기/펼치기** 버튼으로 보고서마다 따로 조절합니다. 접힌 상태에서도 기록과 개수는 갱신됩니다. 실제 분석은 약 2~4분 이상 걸릴 수 있습니다.
-6. 완료 후 요약과 자료 충분도를 확인하고 **전체 보고서 보기**를 엽니다.
-7. **PDF 다운로드**로 동일한 최종 보고서를 저장합니다. 한국어 글꼴, 전체 검토 기록과 참고 자료가 포함됩니다.
+1. **예시 질문으로 시작**을 누르거나 코디·패션 트렌드·ZARA 상품기획 질문을 입력합니다.
+2. 비패션 질문은 내용에 답하지 않고 지원 범위만 안내합니다. 모호하거나 패션·비패션이 섞인 요청은 질문 보완을 안내합니다. 브랜드 비교·다른 브랜드 상품기획은 아직 지원하지 않습니다.
+3. 패션 질문에는 요청 시각(한국시간)을 기준으로 시즌·보고서 유형·조사 분야와 선택 이유를 제안합니다. 명시된 시즌을 우선합니다.
+4. 확인 카드에서 유형·조사 분야를 수정할 수 있습니다. 코디는 컬러·시장, 상품기획은 4개 분야가 필수입니다. 질문·시즌·방향을 수정하면 **제안 다시 받기**로 관련성을 재확인합니다.
+5. **확인하고 보고서 생성**을 누르면 승인한 분야만 조사합니다. 제안 단계에서는 웹 검색을 하지 않습니다. **생성 취소** 시 보고서는 생성하지 않습니다.
+6. **분석 과정**에서 검색·평가·재검색·추출과 보고서 작성·검토의 누적 기록을 확인합니다.
+7. 완료 카드에서 요약·조사 범위·자료 충분도·결과 품질을 확인하고 **전체 보고서 보기**, **PDF 다운로드**를 사용합니다. 처리 완료와 검토 통과는 별개입니다.
 
 첫 요청을 보내면 대화 영역이 화면에 맞게 확장되고 입력창이 하단에 유지됩니다. 보고서가 생성된 뒤 같은 입력창에서 다음 요청을 보낼 수 있으며, 이전 메시지와 보고서는 위로 스크롤하여 확인합니다. 분석 중에도 다음 요청의 초안을 작성할 수 있고 전송은 현재 분석이 끝나거나 검토 중인 제안을 승인·취소한 뒤 가능합니다. Enter는 방향 제안 요청, Shift+Enter는 줄바꿈입니다. 이전 대화를 읽는 중에는 새 진행 상태가 와도 위치를 유지하며, **최신 대화로 이동** 버튼으로 아래로 돌아갈 수 있습니다.
 
@@ -51,18 +51,19 @@ TREND_SEARCH_TIMEOUT=30
 
 ```text
 Vue 채팅 → 8600 동일 출처 프록시 → 8100 FastAPI
-          POST /reports/preview → 요청 시점 기반 LLM 제안
+          POST /reports/preview → 패션 관련성 판단 → 지원 가능 시 분석 계획 제안
           사용자 검토·수정·승인
           POST /reports (preview_id, approved=true) → 작업 ID → 백그라운드 LangGraph
           GET /reports/{id}/events → SSE 진행 상태
           GET /reports/{id} → 저장된 결과와 정제된 HTML
           GET /reports/{id}/pdf → 저장 Markdown → HTML → Chromium PDF
 
-시즌·방향 제안 → 사람 검토 → 정규화 → Planner → Send ×4 Research → Strategy ↔ Critic → Report Builder
+패션 관련성 판단 → 유형·분야·시즌 제안 → 사람 검토 → Planner
+  → 선택한 분야만 Send Research → 유형별 Writer ↔ Critic → Report Builder
                    검색 → Grade → Rewrite / Extract
 ```
 
-`agent/trendweave/`는 노트북의 스키마·State·축 설정·그래프를 포함합니다. `engine.py`는 원본 프롬프트와 규칙을 유지하며, `deps.py`에서 시작 시 모델을 주입합니다. `search.py`는 Tavily의 동기 호출에 명시적인 HTTP timeout을 적용합니다.
+`agent/trendweave/`는 노트북의 스키마·State·축 설정·그래프를 포함합니다. `engine.py`는 기존 상품기획 흐름과 선택적 조사를, `review.py`는 관련성·계획 제안을, `dynamic_reports.py`는 코디·트렌드 보고서를 담당하며, `deps.py`에서 시작 시 모델을 주입합니다. `search.py`는 Tavily의 동기 호출에 명시적인 HTTP timeout을 적용합니다.
 
 `services/`는 SQLite 작업·이벤트 저장, 제한된 작업 스레드 실행, API, Markdown 정제·PDF 변환을 담당합니다. 기본 DB는 `reports.db`이고 `REPORT_DB_PATH`로 바꿀 수 있습니다. 서버 재시작 시 미완료 작업은 실패로 정리하고 완료 결과는 유지합니다. `static/`의 Vue와 PDF 글꼴은 로컬 자원이며 라이선스 파일을 함께 포함했습니다.
 
@@ -76,15 +77,15 @@ curl -X POST http://127.0.0.1:8100/reports/preview \
   -d '{"planning_request":"한국 20-30대 고객의 일상 상품을 기획해줘.","thread_id":"demo"}'
 ```
 
-반환된 `preview_id`, `season`, `brand`, `report_direction`, `reason`, `requested_at`을 확인합니다. 아래 예의 ID·시즌·요청·방향을 실제 확인한 값으로 바꾼 뒤 승인합니다. `2027 S/S`는 입력 형식 예시이며 기본 시즌 상수가 아닙니다.
+응답의 `status`를 먼저 확인합니다. `out_of_scope`, `needs_clarification`, `unsupported`이면 안내만 표시하고 승인하지 않습니다. `pending`일 때 `preview_id`, `season`, `brand`, `report_type`, `selected_axes`, `report_direction`, `reason`, `requested_at`을 확인합니다. 아래 예의 ID·시즌·요청·방향을 실제 확인한 값으로 바꾼 뒤 승인합니다. `2027 S/S`는 입력 형식 예시이며 기본 시즌 상수가 아닙니다.
 
 ```bash
 curl -X POST http://127.0.0.1:8100/reports \
   -H 'Content-Type: application/json' \
-  -d '{"preview_id":"제안_응답의_ID","approved":true,"brand":"ZARA","season":"2027 S/S","planning_request":"한국 20-30대 고객의 일상 상품을 기획해줘.","report_direction":"확인한 상품기획 방향","thread_id":"demo"}'
+  -d '{"preview_id":"제안_응답의_ID","approved":true,"report_type":"product_strategy","selected_axes":["runway","color","market","brand"],"brand":"ZARA","season":"2027 S/S","planning_request":"한국 20-30대 고객의 일상 상품을 기획해줘.","report_direction":"확인한 상품기획 방향","thread_id":"demo"}'
 ```
 
-반환된 `report_id`로 조회합니다. 미승인 직접 생성은 허용하지 않습니다. 동일 승인 요청의 재전송은 기존 작업 ID를 반환하고, 취소한 제안의 승인이나 이미 승인한 내용을 바꾸는 요청은 `409`입니다. 취소는 `POST /reports/preview/{preview_id}/cancel`에 같은 `thread_id`를 보내면 됩니다.
+질문·시즌·방향은 미리보기에서 확인한 값과 일치해야 합니다. 변경했다면 `POST /reports/preview`로 다시 제안받습니다. 재제안 시 `season`, `report_direction`을 함께 보낼 수 있습니다. 반환된 `report_id`로 조회합니다. 미승인 직접 생성은 허용하지 않습니다. 동일 승인 요청의 재전송은 기존 작업 ID를 반환하고, 취소한 제안의 승인이나 이미 승인한 내용을 바꾸는 요청은 `409`입니다. 취소는 `POST /reports/preview/{preview_id}/cancel`에 같은 `thread_id`를 보내면 됩니다.
 
 생성은 `202`, 도구 설정·제안 실패는 `503`, 입력 오류는 `422`, 작업 대기 한도 초과는 `429`입니다. 존재하지 않거나 다른 대화의 제안은 `404`, 완료 전 PDF 요청은 `409`입니다. `report_previews` 테이블은 서버 시작 시 자동 생성되며 제안 원문·시각·승인 수정 내용·보고서 ID를 저장합니다.
 
@@ -96,26 +97,27 @@ curl -X POST http://127.0.0.1:8100/reports \
 .venv/bin/python -m pytest -m browser -q
 ```
 
-`not browser` 테스트는 실제 외부 API 없이 그래프·규칙·작업 저장·API·오류 처리를 검증합니다. `browser` 테스트는 설치된 Chromium으로 한국어 PDF를 생성하고 내용을 확인합니다.
+`not browser` 테스트는 외부 API 없이 관련성 차단·선택 분기·유형별 보고서·승인 검증·저장·실패 처리를 확인합니다. `browser` 테스트는 Chromium에서 데스크톱·모바일 화면과 보고서 3종의 한국어 PDF를 확인합니다.
 
 실제 API 통합 검증은 필요할 때 별도로 실행합니다.
 
 ```bash
+.venv/bin/python scripts/verify_selective_live.py
 .venv/bin/python scripts/verify_preview.py
 .venv/bin/python scripts/verify_live.py
 .venv/bin/python scripts/verify_browser.py
 ```
 
-`verify_preview.py`는 실제 LLM의 시점 기반·명시 시즌 제안만 검증하며 검색·보고서는 생성하지 않습니다. `verify_live.py`는 웹 승인 흐름과 별개로 분석 엔진을 직접 실행하는 개발용 4축 검증입니다. `verify_browser.py`는 8100·8600 서버를 실행하고 실제 화면에서 예시 질문·제안·승인 버튼을 차례로 클릭한 뒤 보고서 보기·PDF 다운로드·모바일 레이아웃·새로고침 대화 초기화까지 검증하고 서버를 종료합니다. 두 포트가 비어 있어야 합니다. PDF·스크린샷·결과는 Git에서 제외된 `.artifacts/`에 저장됩니다.
+`verify_selective_live.py`는 비패션 차단과 보고서 유형별 실제 Gemini·Tavily 연동을 확인하고 결과를 `.artifacts/selective-live/`에 기록합니다. `verify_preview.py`는 실제 LLM의 시점 기반·명시 시즌 제안만 검증하며 검색·보고서는 생성하지 않습니다. `verify_live.py`는 웹 승인 흐름과 별개로 분석 엔진을 직접 실행하는 개발용 4축 검증입니다. `verify_browser.py`는 8100·8600 서버를 실행하고 실제 화면에서 예시 질문·제안·승인 버튼을 차례로 클릭한 뒤 보고서 보기·PDF 다운로드·모바일 레이아웃·새로고침 대화 초기화까지 검증하고 서버를 종료합니다. 두 포트가 비어 있어야 합니다. PDF·스크린샷·결과는 Git에서 제외된 `.artifacts/`에 저장됩니다.
 
 ## 구현 범위와 한계
 
-- 요청 시점 기반 LLM 시즌 제안과 사용자 검토·수정·승인 후 생성 흐름을 추가했습니다. 브랜드는 ZARA로 고정합니다.
+- 패션 관련성 선행 판단, 유형·조사 분야 제안, 사용자 수정·승인, 선택적 조사와 보고서 3종을 지원합니다. 브랜드 조사는 ZARA에 한정하며 일반 코디·트렌드에서 브랜드 조사를 생략할 수 있습니다.
 - 1차 범위인 ZARA 고정 4축 조사, 요청 반영, 재검색, 전략 3개, 검토·재작성, 웹 보고서, PDF 다운로드를 구현했습니다.
 - 검색 총 3회/축, 추출 최대 6개 문서/축, 전략 재작성 최대 2회로 제한합니다. 자료 부족 및 검토 한도 도달은 보고서에 표시합니다. 모든 축의 자료 수집이 실패하면 작업을 실패 처리합니다.
 - 한 프로세스의 로컬 데모용입니다. 기본 동시 분석은 1개이며 실행·대기 작업은 합계 3개까지 허용합니다. 완료 DB는 유지하지만 서버 재시작 후 미완료 분석을 자동 재개하지 않습니다.
 - 문서 검색 결과의 텍스트 일부를 사용하며 신뢰도는 자료 충분도를 뜻합니다. 판매·재고·마진을 분석한 결과가 아닙니다.
-- 질문별 선택적 분석, 동적 보고서 형식, 다른 브랜드, 대화 문맥 기반 후속 분석, 계정별 보고서 목록은 구현하지 않았습니다.
+- 브랜드 비교·다른 브랜드 조사, 대화 문맥 기반 후속 분석, 계정별 보고서 목록은 후속 범위입니다. 패션 관련성과 근거 적합성의 LLM 판단은 오분류 가능성이 있습니다.
 
 ## 참고한 공식 문서
 
