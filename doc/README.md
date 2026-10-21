@@ -9,32 +9,15 @@ Wave 1~15가 각각 증명한 패턴(싱글턴·MCP·SSE·라우팅·게이트·
 `fake`(결정론)/`ollama`(로컬 실모델)/`openai`(실제 API) 세 백엔드 중 아무거나 꽂을 수 있고,
 요청 한 건이 처리되는 전 과정은 LangSmith에 계층 트리로 기록·평가·피드백된다.
 
-## 주요 실행 방법
+## 주요 실행 방법 (macOS)
 
-**맨 처음 한 번만**: 이 폴더를 처음 받았다면(학생 배포 등) `.venv`부터 만든다.
+최상위 폴더의 [README.md](../README.md)에 **가상환경 설치 → `bash run.sh` 실행 → 브라우저 접속** 순서가 정리되어 있습니다. `run.sh` 하나로 백엔드(8100)와 웹 화면(8600)을 함께 실행합니다.
 
-```bash
-bash sh/setup_venv.sh
-```
+- 기본 테스트: `bash run.sh` (API 키 불필요)
+- OpenAI: `.env`에 `OPENAI_API_KEY`를 입력하고 `LLM_BACKEND=openai bash run.sh` (**API 요금 발생**)
+- Ollama: Ollama 앱과 모델 준비 후 `LLM_BACKEND=ollama bash run.sh`
 
-| 방법 | 명령 | 비용 | 용도 |
-|---|---|---|---|
-| Python 가상환경 준비 | `bash sh/setup_venv.sh` | 없음 | `.venv` 생성 + `requirements.txt` 설치(최초 1회, 이미 있으면 설치만 재확인) |
-| 로컬 Ollama 환경 준비 | `bash sh/setup_ollama.sh` | 없음(로컬 추론) | 모델(`qwen3:0.6b`/`8b`)이 이미 있으면 재사용, 없으면 새로 pull — `OLLAMA_FORCE_REFRESH=1`을 주면 지우고 재구성 |
-| 에이전트만 기동 (로컬) | `bash sh/run_agent_ollma.sh` | 없음 | 서버만 띄워두고 직접 curl/웹으로 테스트 |
-| 에이전트만 기동 (OpenAI) | `bash sh/run_agent_openai.sh` | **과금** | 위와 동일하되 실제 API 사용 (y/N 확인) |
-| 브라우저 채팅 화면 | `bash sh/run_frontend.sh` (서버 기동 후) | 백엔드에 따름 | `http://localhost:8600`에서 실제 채팅 UI로 사용 |
-
-`run_agent_*.sh`/`run_frontend.sh`는 `.venv`가 이미 있다는 가정 하에 PATH에
-꽂아 쓰기만 한다(`.venv`가 없으면 시스템 `python3`로 조용히 떨어져 패키지
-누락 오류가 날 수 있다) — `setup_venv.sh`를 먼저 돌려야 하는 이유다.
-
-모든 스크립트는 `.env`가 없으면 `cp .env.example .env` 후 본인 API 키를 채우라는 안내를
-출력하고 종료하며(외부 경로에 의존하지 않음 — 이 폴더만 떼어가도 그대로 동작),
-LangSmith 프로젝트를 백엔드별로 분리해 기록한다(`capstone-all-total[-ollama|-openai]`).
-
-> 더 쉬운 설명과 실제 캡처 화면이 필요하면 [manual_ollma.md](manual_ollma.md)(로컬
-> 실모델) · [manual_openai.md](manual_openai.md)(OpenAI API)를 참고.
+> 화면 및 예시: [manual_ollma.md](manual_ollma.md) · [manual_openai.md](manual_openai.md)
 
 ## 아키텍처 구성도
 
@@ -204,6 +187,8 @@ all_total_vue/
 ├── web_chat.html            # 브라우저 채팅 화면 (정적 1파일)
 ├── web_demo_server.py       # web_chat.html 서빙 + /chat·/chat/stream·/health 프록시(:8600)
 ├── requirements.txt
+├── README.md               # macOS 실행 가이드
+├── run.sh                  # 백엔드+웹 서버 통합 실행
 ├── .env.example
 │
 ├── agent/
@@ -227,13 +212,6 @@ all_total_vue/
 │       ├── memory-leak.md
 │       └── network-timeout.md
 │
-├── sh/                        # 실행 스크립트 모음 (학생 배포용 — 내부 회귀 테스트 스크립트는 제외)
-│   ├── setup_venv.sh            # .venv 생성 + requirements.txt 설치 (맨 처음 1회)
-│   ├── setup_ollama.sh          # 로컬 Ollama 모델 준비 — 있으면 재사용, 없으면 pull (리셋은 OLLAMA_FORCE_REFRESH=1)
-│   ├── run_agent_ollma.sh       # 에이전트만 기동 — 로컬 실모델
-│   ├── run_agent_openai.sh      # 에이전트만 기동 — OpenAI API (과금)
-│   ├── run_frontend.sh          # 브라우저 채팅 화면(web_demo_server.py) 기동
-│   └── make_student_zip.sh      # .env 제외 + .env.example 포함한 학생 배포용 zip 생성
 │
 ├── doc/                       # 문서
 │   ├── README.md                # 이 문서

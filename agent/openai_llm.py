@@ -4,7 +4,7 @@ Wave 10a 구도를 실제 상용 API로: fast(기본 gpt-4o-mini)는 분류·계
 quality(기본 gpt-4o)는 최종 답변 작성 전담. ollama_llm.py와 마찬가지로 실모델이라
 결정론은 아니다 — gate(W6)·replan(W7)·validator(W8)가 연출이 아니라 실제 방어선으로
 동작한다. Ollama와 달리 실제 과금이 발생하는 원격 API이므로, 이 백엔드로 실행하면
-OpenAI 계정에 실제 비용이 청구된다(run_openai.sh 실행 전 반드시 인지할 것).
+OpenAI 계정에 실제 비용이 청구된다(실행 전 반드시 인지할 것).
 
 구조화 출력은 OpenAI Chat Completions의 `response_format={"type": "json_object"}`
 (JSON 모드)로 강제한다 — Ollama의 `format=<JSON Schema>`처럼 스키마 자체를 강제하는

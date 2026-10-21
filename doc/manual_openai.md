@@ -7,8 +7,7 @@
 줍니다.
 
 > 이 문서는 **"어떻게 켜는지"가 아니라 "켜져 있을 때 무엇을 물어볼 수 있는지"**에 집중한
-> 문서입니다. 서버를 직접 띄우고 싶다면 [README.md](README.md)의 "주요 실행 방법"
-> 표에서 `sh/run_agent_openai.sh`를 참고하세요.
+> 문서입니다. 서버를 직접 띄우고 싶다면 [README.md](../README.md)의 OpenAI 실행 방법을 참고하세요.
 > 아래 화면은 결정론적 Fake나 로컬 Ollama가 아니라 **실제 OpenAI API**(fast=`gpt-4o-mini`,
 > quality=`gpt-4o`)를 직접 호출해 캡처한 **진짜 대화**입니다 — [manual_ollma.md](manual_ollma.md)와
 > 같은 질문을 똑같이 던졌지만, 이번엔 실제 계정에 과금되는 호출이라 실행 횟수를 최소한으로

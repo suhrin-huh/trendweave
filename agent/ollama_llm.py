@@ -8,7 +8,7 @@ fc
 비용(cost_usd)은 '가상 단가 × 실측 토큰 수(prompt_eval_count+eval_count)'다 — 로컬
 추론이라 실제 과금은 0이지만, W10a의 모델 분리 효과를 같은 잣대로 비교하기 위함이다.
 
-사전 조건: `ollama serve` 실행 중 + `ollama pull qwen3:0.6b qwen3:8b`.
+사전 조건: `ollama serve` 실행 중 + `ollama pull qwen3:0.6b` 및 `ollama pull qwen3:8b`.
 """
 import json
 import re
