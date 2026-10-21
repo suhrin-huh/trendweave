@@ -6,8 +6,11 @@ class PreviewService:
         self.store = store
         self.proposer = proposer or suggest_plan
 
-    def propose(self, planning_request, thread_id, requested_at):
-        suggestion = self.proposer(planning_request, requested_at)
+    def propose(self, planning_request, thread_id, requested_at, *, season=None, report_direction=None):
+        overrides = {key: value for key, value in {'season': season, 'report_direction': report_direction}.items() if value}
+        suggestion = self.proposer(planning_request, requested_at, **overrides)
+        if isinstance(suggestion, dict):
+            return {**suggestion, 'requested_at': requested_at}
         payload = {**suggestion.model_dump(), 'planning_request': planning_request,
                    'requested_at': requested_at}
         return self.store.create_preview(thread_id, payload)

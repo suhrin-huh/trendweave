@@ -1,6 +1,46 @@
 from typing import Literal
 from pydantic import BaseModel, Field
 
+Axis = Literal['runway', 'color', 'market', 'brand']
+ReportType = Literal['product_strategy', 'styling', 'trend_analysis']
+
+
+class SelectedResearchPlan(BaseModel):
+    request_profile: 'RequestProfile'
+    axes: dict[Axis, 'AxisPlan']
+
+
+class Outfit(BaseModel):
+    name: str
+    composition: list[str]
+    color_combination: list[str]
+    occasion: str
+    rationale: str
+    caution: str
+    evidence_ids: list[str]
+
+
+class StylingReport(BaseModel):
+    executive_summary: str
+    outfits: list[Outfit] = Field(description='근거 있는 코디 최대 3안. 충분한 근거가 있으면 3안, 부족하면 개수를 줄이고 limitations에 이유 표시')
+    usage_tips: list[str]
+    limitations: list[str]
+
+
+class TrendFinding(BaseModel):
+    name: str
+    observation: str
+    interpretation: str
+    application: str
+    evidence_ids: list[str]
+
+
+class TrendAnalysisReport(BaseModel):
+    executive_summary: str
+    findings: list[TrendFinding]
+    watch_points: list[str]
+    limitations: list[str]
+
 
 # ② Research Planner
 class RequestProfile(BaseModel):
@@ -114,6 +154,7 @@ class AxisResult(BaseModel):
     data_gaps: list[str]
     attempts: int
     queries: list[str]
+    status: Literal['succeeded', 'insufficient', 'failed'] = 'succeeded'
 
 
 # ④ Strategy Writer

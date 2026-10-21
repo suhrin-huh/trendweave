@@ -2,7 +2,7 @@
 import json
 from fastapi.testclient import TestClient
 import pytest
-from agent.trendweave.review import PlanningSuggestion, suggest_plan
+from agent.trendweave.review import PlanningSuggestion, DomainDecision, suggest_plan
 from services.report_store import ReportStore
 from services.report_service import ReportService
 from test_reports import report_app
@@ -47,9 +47,11 @@ def test_prompt_supplies_date_question_and_explicit_season():
     captured=[]
     class Model:
         def with_structured_output(self,schema):
-            assert schema is PlanningSuggestion
+            self.schema=schema
             return self
         def invoke(self,messages):
+            if self.schema is DomainDecision:
+                return DomainDecision(domain_status='fashion',reason='패션 상품기획',supported=True)
             captured.extend(messages)
             return PlanningSuggestion(season='2028 F/W',brand='ZARA',report_direction='명시된 시즌 분석',reason='사용자가 지정한 시즌을 따른다.')
     result=suggest_plan('2028 F/W 시즌 상품기획','2026-10-21T14:30:00+09:00',model=Model())
@@ -73,6 +75,11 @@ def test_approval_gate_and_user_edits(report_app):
         assert job_count(report_app)==0
         payload=approval(value,season='2028 FW',planning_request='가벼운 데님 상품만 기획해줘.',report_direction='여름용 데님 소재와 아이템을 중점 검토한다.')
         response=client.post('/reports',json=payload)
+        assert response.status_code==409
+        revised=client.post('/reports/preview',json={'thread_id':'review-test',
+            'planning_request':payload['planning_request'],'season':payload['season'],
+            'report_direction':payload['report_direction']}).json()
+        response=client.post('/reports',json=approval(revised))
         assert response.status_code==202
         report_id=response.json()['report_id']
         request=report_app.state.report_store.get(report_id)['request']
@@ -80,8 +87,9 @@ def test_approval_gate_and_user_edits(report_app):
         assert request['planning_request']==payload['planning_request']
         assert request['report_direction']==payload['report_direction']
         assert request['approved'] is True
-        assert request['requested_at']==value['requested_at']
-        assert report_app.state.report_store.get_preview(value['preview_id'])['status']=='approved'
+        assert request['requested_at']==revised['requested_at']
+        assert report_app.state.report_store.get_preview(revised['preview_id'])['status']=='approved'
+        assert report_app.state.report_store.get_preview(value['preview_id'])['status']=='pending'
 
 
 def test_duplicate_approval_does_not_start_twice(report_app):

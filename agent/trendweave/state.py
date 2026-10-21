@@ -1,4 +1,4 @@
-from .schemas import RequestProfile, AxisResult, ProductStrategyReport, Critique
+from .schemas import RequestProfile, AxisResult, ProductStrategyReport, Critique, StylingReport, TrendAnalysisReport
 import operator
 from typing import Annotated, TypedDict
 
@@ -11,8 +11,19 @@ def merge_dict(left: dict | None, right: dict | None) -> dict:
 class TrendState(TypedDict, total=False):
     # 사용자 입력
     season: str
-    brand: str
+    brand: str | None
     planning_request: str
+    report_type: str
+    selected_axes: list[str]
+    domain_status: str
+    domain_reason: str
+    intent: str
+    assumptions: list[str]
+    axis_reasons: dict[str, str]
+    schema_version: int
+    requested_at: str
+    quality_status: str
+    research_status: dict[str, str]
 
     # ① Input Normalizer
     season_terms: list[str]
@@ -26,7 +37,7 @@ class TrendState(TypedDict, total=False):
     research_results: Annotated[dict[str, AxisResult], merge_dict]
 
     # ④ Strategy ↔ ⑤ Critic
-    report: ProductStrategyReport
+    report: ProductStrategyReport | StylingReport | TrendAnalysisReport
     critique: Critique
     revision_count: int
 
@@ -40,7 +51,7 @@ class TrendState(TypedDict, total=False):
 class ResearchState(TypedDict, total=False):
     axis: str
     season: str
-    brand: str
+    brand: str | None
     season_terms: list[str]
     today: str
     plan: dict
@@ -52,6 +63,7 @@ class ResearchState(TypedDict, total=False):
     grades: dict[str, dict]      # 문서별 평가 결과
     missing_aspects: list[str]   # 아직 확인하지 못한 측면
     attempt: int                 # 검색 시도 횟수
+    search_errors: int           # 상세 오류는 저장하지 않고 실패 횟수만 보존
 
     result: AxisResult
     trace: Annotated[list[dict], operator.add]

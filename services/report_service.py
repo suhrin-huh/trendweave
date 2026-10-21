@@ -23,7 +23,7 @@ class ReportService:
         if request.get('report_direction'):
             planning_request += '\n\n보고서 방향: ' + request['report_direction']
         for mode, payload in engine.trend_agent.stream(
-                {**request, 'brand': DEFAULT_BRAND, 'planning_request': planning_request},
+                {**request, 'brand': (DEFAULT_BRAND if request.get('report_type', 'product_strategy') == 'product_strategy' else request.get('brand')), 'planning_request': planning_request},
                 config={'recursion_limit': engine.RECURSION_LIMIT},
                 stream_mode=['custom', 'values']):
             if mode == 'custom':
@@ -40,7 +40,7 @@ class ReportService:
         return TypeAdapter(dict).dump_python(final, mode='json')
 
     def submit(self, request, preview_id=None):
-        request = {**request, 'brand': DEFAULT_BRAND}
+        request = {**request, 'brand': (DEFAULT_BRAND if request.get('report_type', 'product_strategy') == 'product_strategy' else request.get('brand'))}
         if not self.slots.acquire(blocking=False):
             raise OverflowError('대기 중인 분석이 많습니다. 잠시 후 다시 시도해 주세요.')
         try:

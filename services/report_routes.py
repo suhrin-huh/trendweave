@@ -8,7 +8,8 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agent.trendweave.config import DEFAULT_BRAND
-from agent.trendweave.review import normalize_season, request_time
+from agent.trendweave.review import normalize_season, request_time, validate_selection
+from agent.trendweave.schemas import Axis, ReportType
 
 router = APIRouter()
 
@@ -25,6 +26,18 @@ class ThreadRequest(BaseModel):
 
 class PreviewRequest(ThreadRequest):
     planning_request: str = Field(min_length=1, max_length=4000)
+    season: str | None = Field(default=None, min_length=4, max_length=20)
+    report_direction: str | None = Field(default=None, min_length=1, max_length=1500)
+
+    @field_validator('report_direction', mode='before')
+    @classmethod
+    def strip_preview_direction(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator('season')
+    @classmethod
+    def preview_season(cls, value):
+        return normalize_season(value) if value is not None else None
 
     @field_validator('planning_request', mode='before')
     @classmethod
@@ -35,7 +48,9 @@ class PreviewRequest(ThreadRequest):
 class ReportRequest(PreviewRequest):
     preview_id: str = Field(min_length=1, max_length=100)
     approved: Literal[True]
-    brand: Literal['ZARA']
+    brand: Literal['ZARA'] | None
+    report_type: ReportType = 'product_strategy'
+    selected_axes: list[Axis] = Field(default_factory=lambda: ['runway', 'color', 'market', 'brand'])
     season: str = Field(min_length=4, max_length=20)
     report_direction: str = Field(min_length=1, max_length=1500)
 
@@ -58,7 +73,8 @@ async def preview_report(body: PreviewRequest, request: Request):
     try:
         async with request.app.state.preview_semaphore:
             return await asyncio.to_thread(request.app.state.preview_service.propose,
-                body.planning_request, body.thread_id, requested_at)
+                body.planning_request, body.thread_id, requested_at,
+                season=body.season, report_direction=body.report_direction)
     except Exception:
         logging.getLogger(__name__).exception('Report preview failed')
         raise HTTPException(503, '분석 방향을 제안하지 못했습니다. 모델 설정·호출 한도를 확인하고 다시 시도해 주세요. 보고서는 생성하지 않았습니다.')
@@ -98,7 +114,24 @@ async def create_report(body: ReportRequest, request: Request):
     # pending->approved update also share one SQLite transaction in create().
     with store.lock:
         preview = get_preview(request, body.preview_id, body.thread_id)
-        payload = {**body.model_dump(), 'requested_at': preview['payload']['requested_at']}
+        plan = preview['payload']
+        if plan.get('domain_status') != 'fashion':
+            raise HTTPException(409, '패션 관련성 확인을 위해 분석 방향을 다시 제안받아 주세요.')
+        if any(getattr(body, key) != plan.get(key) for key in ('planning_request', 'season', 'report_direction')):
+            raise HTTPException(409, '질문·시즌·방향이 변경되었습니다. 분석 방향을 다시 제안받아 주세요.')
+        try:
+            validate_selection(body.report_type, body.selected_axes, body.brand)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        # A brand change is allowed only as a consequence of changing selected fields.
+        if 'brand' not in body.selected_axes and body.brand is not None:
+            raise HTTPException(422, '브랜드 미조사 시 브랜드는 비워 주세요.')
+        payload = {**body.model_dump(), 'requested_at': plan['requested_at'],
+                   'schema_version': 2, 'domain_status': 'fashion',
+                   'domain_reason': plan.get('domain_reason', ''),
+                   'intent': plan.get('intent', ''), 'assumptions': plan.get('assumptions', []),
+                   'axis_reasons': {axis: plan.get('axis_reasons', {}).get(axis, '사용자가 선택한 조사 분야')
+                                    for axis in body.selected_axes}}
         if preview['status'] == 'approved':
             if preview['approval'] != payload:
                 raise HTTPException(409, '이미 다른 내용으로 승인한 제안입니다. 새 질문으로 다시 확인해 주세요.')
@@ -171,7 +204,7 @@ async def report_pdf(report_id: str, request: Request):
         raise HTTPException(503, 'PDF를 생성하지 못했습니다. Chromium 설치를 확인하고 다운로드를 다시 시도해 주세요.')
     season = report['request']['season'].replace(' ', '_').replace('/', '')
     # Existing reports keep the brand they were actually researched for.
-    brand = report['result'].get('brand') or report['result'].get('report', {}).get('brand') or report['request'].get('brand', DEFAULT_BRAND)
+    brand = report['result'].get('brand') or report['result'].get('report', {}).get('brand') or report['request'].get('brand') or report['request'].get('report_type', DEFAULT_BRAND)
     brand = re.sub(r'[^A-Za-z0-9_-]', '_', brand)
     return Response(content, media_type='application/pdf', headers={
         'Content-Disposition': f'attachment; filename="TrendWeave_{brand}_{season}_{report_id}.pdf"'})
