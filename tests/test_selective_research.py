@@ -12,7 +12,7 @@ from conftest import Model, Search
 
 
 def approve(value, **changes):
-    return {key:value[key] for key in ['preview_id','planning_request','season','brand','report_direction','report_type','selected_axes']} | {'approved':True,**changes}
+    return {key:value[key] for key in ['preview_id','planning_request','runway_season','brand','report_direction','report_type','selected_axes']} | {'approved':True,**changes}
 
 
 @pytest.mark.parametrize('question,status',[
@@ -45,7 +45,7 @@ def test_non_fashion_does_not_call_planning_model():
     ('trend_analysis',['color'],'2027 S/S 의류 컬러 트렌드')])
 def test_only_selected_branches_run_and_report_is_written_once(configured,kind,axes,question):
     events=[]
-    result=ReportService.run_graph({'season':'2027 S/S','brand':None,'report_type':kind,
+    result=ReportService.run_graph({'runway_season':'2027 S/S','brand':None,'report_type':kind,
         'selected_axes':axes,'planning_request':question,'requested_at':'2026-10-21T10:30:00+09:00'}, events.append)
     assert set(result['research_plan'])==set(axes)
     assert set(result['research_results'])==set(axes)
@@ -68,21 +68,24 @@ def test_selection_constraints_and_stale_review(report_app):
         assert value['report_type']=='styling' and value['brand'] is None
         for axes in [[],['color'],['color','color','market']]:
             assert client.post('/reports',json=approve(value,selected_axes=axes)).status_code==422
-        for changes in [{'planning_request':'파이썬 코드 작성'}, {'report_direction':'맛집 추천'}, {'season':'2028 F/W'}]:
-            assert client.post('/reports',json=approve(value,**changes)).status_code==409
+        for changes in [{'planning_request':'파이썬 코드 작성'}, {'report_direction':'맛집 추천'}, {'runway_season':'2028 F/W'}]:
+            assert client.post('/reports',json=approve(value,**changes)).status_code==(422 if 'runway_season' in changes else 409)
         assert client.post('/reports',json=approve(value,domain_status='fashion')).status_code==422
         response=client.post('/reports',json=approve(value,report_type='trend_analysis',selected_axes=['color']))
+        assert response.status_code==409
+        revised=client.post('/reports/preview',json={'planning_request':'데님 코디 추천','report_type':'trend_analysis','selected_axes':['color']}).json()
+        response=client.post('/reports',json=approve(revised))
         assert response.status_code==202
         stored=report_app.state.report_store.get(response.json()['report_id'])['request']
         assert stored['selected_axes']==['color'] and stored['domain_status']=='fashion'
-        assert client.post('/reports',json=approve(value,report_type='trend_analysis',selected_axes=['color'])).json()['report_id']==response.json()['report_id']
-        assert client.post('/reports',json=approve(value)).status_code==409
+        assert client.post('/reports',json=approve(revised)).json()['report_id']==response.json()['report_id']
+        assert client.post('/reports',json=approve(revised,report_type='styling',selected_axes=['color','market'])).status_code==409
 
 
 def test_direction_edit_reclassified_before_plan(report_app):
     with TestClient(report_app) as client:
         response=client.post('/reports/preview',json={'planning_request':'코디 추천',
-            'season':'2027 S/S','report_direction':'파이썬 코드 작성'})
+            'runway_season':'2027 S/S','report_direction':'파이썬 코드 작성'})
         assert response.status_code==200
         assert response.json()['status']=='out_of_scope'
 
@@ -90,7 +93,7 @@ def test_direction_edit_reclassified_before_plan(report_app):
 def test_all_selected_research_empty_fails(configured):
     configured.search_tool=Search(empty=True)
     with pytest.raises(RuntimeError,match='유효한 근거'):
-        ReportService.run_graph({'season':'2027 S/S','brand':None,'report_type':'trend_analysis',
+        ReportService.run_graph({'runway_season':'2027 S/S','brand':None,'report_type':'trend_analysis',
             'selected_axes':['color'],'planning_request':'의류 컬러 트렌드'},lambda event:None)
 
 
@@ -107,7 +110,7 @@ def test_missing_branch_and_invalid_evidence_are_visible(configured,monkeypatch)
                 return result
             return super().respond(schema,text)
     configured.configure(PartialModel(),Model(),Search())
-    result=ReportService.run_graph({'season':'2027 S/S','brand':None,'report_type':'styling',
+    result=ReportService.run_graph({'runway_season':'2027 S/S','brand':None,'report_type':'styling',
         'selected_axes':['color','market'],'planning_request':'데님 코디'},lambda event:None)
     assert result['research_status']['color']=='failed'
     assert result['research_status']['runway']=='not_selected'
@@ -125,7 +128,7 @@ def test_new_report_korean_pdf(configured,kind,axes):
     import asyncio
     from services.pdf_service import create_pdf
     from pypdf import PdfReader
-    result=ReportService.run_graph({'season':'2027 S/S','brand':None,'report_type':kind,
+    result=ReportService.run_graph({'runway_season':'2027 S/S','brand':None,'report_type':kind,
         'selected_axes':axes,'planning_request':'패션 트렌드와 코디'},lambda event:None)
     content=asyncio.run(create_pdf(result['final_markdown']))
     text='\n'.join(page.extract_text() for page in PdfReader(io.BytesIO(content)).pages)
@@ -180,7 +183,7 @@ def test_domain_provider_failure_is_not_a_rejection(report_app):
 
 def test_search_error_is_failed_instead_of_unselected(configured,monkeypatch):
     monkeypatch.setattr(configured,'safe_search',lambda *args:([], 'private search failure'))
-    state={'season':'2027 S/S','brand':None,'report_type':'trend_analysis',
+    state={'runway_season':'2027 S/S','brand':None,'report_type':'trend_analysis',
         'selected_axes':['color'],'planning_request':'의류 컬러 트렌드'}
     state.update(configured.input_normalizer(state))
     state.update(configured.research_planner(state))
@@ -203,7 +206,7 @@ def test_new_reports_show_remaining_review_issues(configured,failure):
             return super().respond(schema,text)
     configured.configure(BadModel() if failure=='grounding' else Model(),
                          BadCritic() if failure=='critic_unavailable' else Model(), Search())
-    result=ReportService.run_graph({'season':'2027 S/S','brand':None,'report_type':'trend_analysis',
+    result=ReportService.run_graph({'runway_season':'2027 S/S','brand':None,'report_type':'trend_analysis',
         'selected_axes':['color'],'planning_request':'의류 컬러 트렌드'},lambda event:None)
     assert result['quality_status']=='review_required'
     if failure=='grounding':

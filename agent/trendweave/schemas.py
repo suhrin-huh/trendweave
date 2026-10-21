@@ -27,6 +27,13 @@ class StylingReport(BaseModel):
     limitations: list[str]
 
 
+class GeneralProductReport(BaseModel):
+    executive_summary: str
+    product_directions: list['ProductDirection']
+    final_note: str
+    limitations: list[str]
+
+
 class TrendFinding(BaseModel):
     name: str
     observation: str
@@ -73,7 +80,7 @@ class DocumentGrade(BaseModel):
     doc_id: str = Field(description="평가한 문서 번호 (예: R1)")
     is_relevant: bool = Field(description="이 축의 목적과 평가 기준에 맞는 자료인가")
     season_match: Literal["일치", "불일치", "확인 불가", "해당 없음"] = Field(
-        description="요청 시즌과의 일치 여부. Market 및 Brand 축은 '해당 없음'"
+        description="Runway의 컬렉션 시즌과의 일치 여부. Color·Market·Brand는 '해당 없음'"
     )
     covered_aspects: list[str] = Field(description="이 문서가 실제로 다루는 필수 확인 측면 (주어진 목록의 문자열 그대로)")
     reason: str = Field(description="판단 이유 한 줄")
@@ -161,10 +168,10 @@ class AxisResult(BaseModel):
 class ProductDirection(BaseModel):
     direction_name: str = Field(description="상품기획 방향 이름")
     adoption_level: Literal["적극 반영", "선택적 반영", "신중 검토"] = Field(
-        description="브랜드 관점의 적용 수준"
+        description="자료와 요청 조건을 고려한 적용 수준. 브랜드가 지정된 경우에만 브랜드 특성을 고려"
     )
     rationale: str = Field(
-        description="① 어떤 Signal(근거 번호)에서 ② 브랜드의 어떤 특성과 맞고 ③ 요청 프로필의 타깃 및 조건을 어떻게 충족하는지 2~3문장"
+        description="Signal(근거 번호)과 요청의 타깃·조건을 연결한 판단 이유 2~3문장. 특정 브랜드가 지정되고 관련 근거가 있는 경우에만 브랜드 적합성도 설명"
     )
     recommended_items: list[str] = Field(description="추천 상품 아이템")
     recommended_colors: list[str] = Field(description="추천 컬러")

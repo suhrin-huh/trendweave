@@ -35,10 +35,10 @@ def report_app(tmp_path, result):
 
 
 def completed(client):
-    preview=client.post('/reports/preview',json={'planning_request':'일상 상품 기획'}).json()
+    preview=client.post('/reports/preview',json={'planning_request':'ZARA 일상 상품 기획'}).json()
     response=client.post('/reports',json={
-        'preview_id':preview['preview_id'],'approved':True,'season':'2027 SS','brand':'ZARA',
-        'planning_request':'일상 상품 기획','report_direction':preview['report_direction']})
+        'preview_id':preview['preview_id'],'approved':True,'runway_season':'2027 SS','brand':'ZARA',
+        'planning_request':'ZARA 일상 상품 기획','report_direction':preview['report_direction'],'report_type':preview['report_type'],'selected_axes':preview['selected_axes']})
     assert response.status_code==202
     report_id=response.json()['report_id']
     for _ in range(100):
@@ -53,7 +53,7 @@ def completed(client):
 def test_creation_and_replay(report_app):
     with TestClient(report_app) as client:
         report_id,report=completed(client)
-        assert report['request']['season']=='2027 S/S'
+        assert report['request']['runway_season']=='2027 S/S'
         assert report['request']['brand']=='ZARA'
         assert '<table>' in report['report_html']
         persisted=report_app.state.report_store.events(report_id)
@@ -73,9 +73,9 @@ def test_creation_and_replay(report_app):
 
 def test_validation_and_unavailable(report_app):
     with TestClient(report_app) as client:
-        for request in [ {'season':'2027 SS','planning_request':'   '},
-                         {'season':'tomorrow','planning_request':'기획'},
-                         {'season':'2027 SS','planning_request':'x'*4001}]:
+        for request in [ {'runway_season':'2027 SS','planning_request':'   '},
+                         {'runway_season':'tomorrow','planning_request':'기획'},
+                         {'runway_season':'2027 SS','planning_request':'x'*4001}]:
             assert client.post('/reports',json=request).status_code==422
         report_app.state.trend_error='API 키를 설정하세요.'
         assert client.post('/reports/preview',json={'planning_request':'기획'}).status_code==503
@@ -84,8 +84,8 @@ def test_validation_and_unavailable(report_app):
 def test_restart_isolation_and_failure(tmp_path):
     path=tmp_path/'jobs.db'
     store=ReportStore(path)
-    first=store.create({'season':'2027 S/S'})
-    second=store.create({'season':'2027 F/W'})
+    first=store.create({'runway_season':'2027 S/S'})
+    second=store.create({'runway_season':'2027 F/W'})
     store.complete(second,{'final_markdown':'saved'})
     assert first!=second
     store.event(first,{'step':'search','message':'first only'})
@@ -159,7 +159,7 @@ def test_existing_report_pdf_preserves_original_brand(report_app,monkeypatch):
         return b'%PDF-test'
     monkeypatch.setattr('services.pdf_service.create_pdf',pdf)
     with TestClient(report_app) as client:
-        report_id=report_app.state.report_store.create({'season':'2027 S/S'})
+        report_id=report_app.state.report_store.create({'runway_season':'2027 S/S'})
         report_app.state.report_store.complete(report_id,{'brand':'UNIQLO','final_markdown':'# UNIQLO'})
         response=client.get(f'/reports/{report_id}/pdf')
         assert response.status_code==200

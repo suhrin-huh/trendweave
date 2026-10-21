@@ -112,11 +112,8 @@ def test_tavily_bounded_http(monkeypatch):
     assert seen[0]['max_results']==5
 
 
-def test_service_enforces_zara_brand(configured):
+def test_service_does_not_override_explicit_brand(configured):
     from services.report_service import ReportService
-    output = ReportService.run_graph({'season':'2027 S/S','brand':'UNIQLO',
-        'planning_request':'한국 20-30대 일상 상품 기획'}, lambda event: None)
-    assert output['brand'] == 'ZARA'
-    assert 'ZARA' in output['research_plan']['brand']['queries'][0]
-    assert 'UNIQLO' not in output['research_plan']['brand']['queries'][0]
-    assert '**Brand:** ZARA' in output['final_markdown']
+    with pytest.raises(ValueError,match='ZARA'):
+        ReportService.run_graph({'season':'2027 S/S','brand':'UNIQLO',
+            'planning_request':'한국 20-30대 일상 상품 기획'},lambda event:None)

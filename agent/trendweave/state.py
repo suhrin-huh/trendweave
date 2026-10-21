@@ -1,4 +1,4 @@
-from .schemas import RequestProfile, AxisResult, ProductStrategyReport, Critique, StylingReport, TrendAnalysisReport
+from .schemas import RequestProfile, AxisResult, ProductStrategyReport, Critique, StylingReport, TrendAnalysisReport, GeneralProductReport
 import operator
 from typing import Annotated, TypedDict
 
@@ -10,7 +10,12 @@ def merge_dict(left: dict | None, right: dict | None) -> dict:
 
 class TrendState(TypedDict, total=False):
     # 사용자 입력
-    season: str
+    season: str | None
+    runway_season: str | None
+    runway_season_source: str
+    wearing_season: str | None
+    time_scope: str | None
+    brand_scope: str
     brand: str | None
     planning_request: str
     report_type: str
@@ -37,7 +42,7 @@ class TrendState(TypedDict, total=False):
     research_results: Annotated[dict[str, AxisResult], merge_dict]
 
     # ④ Strategy ↔ ⑤ Critic
-    report: ProductStrategyReport | StylingReport | TrendAnalysisReport
+    report: ProductStrategyReport | StylingReport | TrendAnalysisReport | GeneralProductReport
     critique: Critique
     revision_count: int
 
@@ -50,7 +55,11 @@ class TrendState(TypedDict, total=False):
 
 class ResearchState(TypedDict, total=False):
     axis: str
-    season: str
+    season: str | None
+    runway_season: str | None
+    wearing_season: str | None
+    time_scope: str | None
+    brand_scope: str
     brand: str | None
     season_terms: list[str]
     today: str
