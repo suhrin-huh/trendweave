@@ -8,6 +8,7 @@
 - Wave 14 : SUPERVISOR_VERSION(v1/v2) 환경변수로 legacy/신형 파이프라인 즉시 전환
 - LangSmith: 요청당 chat_request 루트 run 아래로 노드·LLM·MCP 호출이 계층 기록됨
 """
+import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
@@ -63,6 +64,22 @@ def _build_llms():
 async def lifespan(app: FastAPI):
     global CREATION_COUNT
     CREATION_COUNT += 1
+    from services.report_store import ReportStore
+    from services.report_service import ReportService
+    from agent.trendweave.deps import initialize
+    app.state.report_store = ReportStore(os.getenv("REPORT_DB_PATH", "reports.db"))
+    app.state.trend_error = initialize()
+    app.state.report_service = ReportService(
+        app.state.report_store, workers=max(1, int(os.getenv("TREND_MAX_WORKERS", "1"))))
+    app.state.pdf_semaphore = asyncio.Semaphore(1)
+    # Fashion mode starts independently of the legacy incident MCP servers.
+    if os.getenv("SERVICE_MODE", "trendweave") == "trendweave":
+        try:
+            yield
+        finally:
+            await asyncio.to_thread(app.state.report_service.close)
+            app.state.report_store.close()
+        return
     mcp = MCPClient()
     await mcp.start()   # Wave 2 — MCP subprocess는 서버 수명 동안 딱 1개
     backend, fast_llm, quality_llm = _build_llms()
@@ -78,6 +95,8 @@ async def lifespan(app: FastAPI):
     app.state.graph = build_graph(deps) if deps.version == "v2" else None
     app.state.instance_id = id(deps)
     yield
+    await asyncio.to_thread(app.state.report_service.close)
+    app.state.report_store.close()
     await mcp.stop()
     deps.session_store.close()
     try:   # 종료 전 LangSmith 배치 전송 플러시 — kill 시 run이 pending으로 남는 것 방지
@@ -88,10 +107,26 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+from services.report_routes import router as report_router
+app.include_router(report_router)
+
+
+@app.middleware("http")
+async def service_mode_guard(request, call_next):
+    if request.url.path.startswith("/chat") and not hasattr(app.state, "deps"):
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"detail": "패션 보고서는 /reports API를 사용하세요."}, status_code=409)
+    return await call_next(request)
 
 
 @app.get("/health")
 async def health():
+    if not hasattr(app.state, "deps"):
+        return {"status": "ok", "service": "trendweave", "brand": "UNIQLO",
+                "analysis_ready": app.state.trend_error is None,
+                "configuration_error": app.state.trend_error,
+                "model": os.getenv("TREND_MODEL", "gemini-3.1-flash-lite"),
+                "creation_count": CREATION_COUNT}
     return {"status": "ok", "instance_id": app.state.instance_id,
             "creation_count": CREATION_COUNT,
             "supervisor_version": app.state.deps.version,
@@ -102,7 +137,7 @@ async def health():
 
 @app.get("/version")
 async def version():
-    return {"supervisor_version": app.state.deps.version}
+    return {"service": "trendweave"} if not hasattr(app.state, "deps") else {"supervisor_version": app.state.deps.version}
 
 
 def _metadata(result: dict, run_id: str | None) -> dict:
