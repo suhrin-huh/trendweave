@@ -9,6 +9,7 @@
 </head>
 <body>
 <div id="app" v-cloak>
+<div class="service-shell" :class="{'has-conversation': messages.length > 0}">
   <header><a class="wordmark" href="/">Trend<span>Weave</span><small>FASHION INTELLIGENCE</small></a><div class="brand-tag">BRAND FOCUS <strong>{{ brand }}</strong></div></header>
   <main>
     <section class="intro">
@@ -26,10 +27,11 @@
     <section class="workspace" aria-label="상품기획 대화">
       <div class="workspace-heading"><span class="status-dot"></span><strong>상품기획 리서치</strong><span>STRATEGY DESK</span></div>
       <div v-if="configurationError" class="notice error" role="alert">{{ configurationError }}</div>
-      <div class="conversation" ref="logEl" aria-live="polite">
+      <div class="conversation-frame">
+      <div class="conversation" ref="logEl" role="log" aria-label="대화 내역" aria-live="polite" @scroll.passive="onConversationScroll">
         <div v-if="!messages.length" class="welcome"><div class="welcome-icon" aria-hidden="true">tw.</div><h2>무엇을 기획하고 있나요?</h2><p>분석 시즌과 상품기획 요청을 알려주세요.<br>네 분야를 조사하고, 검토를 거쳐 전략을 제안합니다.</p><div class="welcome-line"></div><small>예시 질문으로 첫 번째 보고서를 시작해 보세요.</small></div>
         <article v-for="item in messages" :key="item.id" :class="['message', item.kind]">
-          <div v-if="item.kind==='user'" class="user-bubble">{{ item.text }}</div>
+          <template v-if="item.kind==='user'"><span class="message-author">나</span><div class="user-bubble">{{ item.text }}</div></template>
           <template v-else>
             <div class="report-top"><span class="eyebrow">TRENDWEAVE REPORT</span><span class="pill">{{ statusLabel(item.status) }}</span></div>
             <h3>{{ item.season }} · {{ item.brand }}</h3>
@@ -47,13 +49,16 @@
           </template>
         </article>
       </div>
+      <button v-if="hasNewMessages" class="latest-message" type="button" @click="scrollToLatest({force: true})">최신 대화로 이동 ↓</button>
+      </div>
       <form class="composer" @submit.prevent="submit">
         <div class="composer-meta"><label for="season">분석 시즌</label><select id="season" v-model="season" :disabled="sending"><option v-for="value in seasons" :key="value">{{ value }}</option></select><span>브랜드 {{ brand }} · 4개 분야 전체 조사</span></div>
-        <div class="input-row"><textarea v-model="input" aria-label="상품기획 요청" placeholder="예: 데님 상품군 중심으로, 가벼운 여름 소재 위주로 기획해줘." rows="2" maxlength="4000" :disabled="sending" @keydown.enter.exact.prevent="submit"></textarea><button class="send" type="submit" :disabled="sending || !ready || !input.trim()" aria-label="보고서 생성">↗</button></div>
-        <small>새 요청마다 독립적인 보고서를 생성합니다. 이전 대화에 대한 후속 분석은 지원하지 않습니다.</small>
+        <div class="input-row"><textarea ref="inputEl" v-model="input" aria-label="상품기획 요청" :placeholder="messages.length ? '다음 상품기획 요청을 입력하세요.' : '예: 데님 상품군 중심으로, 가벼운 여름 소재 위주로 기획해줘.'" rows="2" maxlength="4000" @keydown="onInputKeydown"></textarea><button class="send" type="submit" :disabled="sending || !ready || !input.trim()" aria-label="보고서 생성">↗</button></div>
+        <small>{{ sending ? '분석 중에도 다음 요청을 작성할 수 있습니다. 현재 분석이 끝나면 전송할 수 있습니다.' : 'Enter로 전송 · Shift+Enter로 줄바꿈 · 각 요청은 독립적인 보고서를 생성합니다.' }}</small>
       </form>
     </section>
   </main>
+</div>
   <div v-if="selected" class="modal-backdrop" @click.self="selected=null" @keydown.esc="selected=null">
     <section class="report-modal" role="dialog" aria-modal="true" aria-label="전체 상품기획 보고서" tabindex="-1" ref="modalEl">
       <div class="modal-toolbar"><strong>{{ selected.season }} · {{ selected.brand }}</strong><div><button class="secondary" :disabled="selected.downloading" @click="downloadPdf(selected)">{{ selected.downloading ? 'PDF 만드는 중…' : 'PDF 다운로드 ↓' }}</button><button class="close" @click="selected=null" aria-label="보고서 닫기">×</button></div></div>

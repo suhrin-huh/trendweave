@@ -3,7 +3,8 @@ createApp({setup() {
   const exampleRequest = '한국의 20-30대 고객이 일상에서 활용하기 쉬운 상품 중심으로 런웨이·컬러·시장·브랜드 트렌드를 분석하고 상품기획 방향 3개를 제안해줘.';
   const brand = ref('ZARA');
   const season = ref('2027 S/S'), input = ref(''), sending = ref(false), ready = ref(false);
-  const configurationError = ref(''), messages = ref([]), selected = ref(null), logEl = ref(null), modalEl = ref(null);
+  const configurationError = ref(''), messages = ref([]), selected = ref(null), logEl = ref(null), modalEl = ref(null), inputEl = ref(null);
+  const nearBottom = ref(true), hasNewMessages = ref(false);
   const seasons = ['2026 F/W','2027 S/S','2027 F/W','2028 S/S','2028 F/W'];
   // A page load always starts a fresh conversation. Remove keys written by
   // earlier versions, but leave unrelated application storage untouched.
@@ -13,7 +14,28 @@ createApp({setup() {
   let stream = null, poll = null, counter = 0, activeItem = null;
   const axisLabel = key => ({runway:'런웨이',color:'컬러',market:'시장',brand:'브랜드'}[key] || key);
   const statusLabel = status => ({queued:'준비 중',running:'분석 중',completed:'완료',failed:'생성 실패'}[status] || status);
-  const scroll = () => nextTick(() => {if(logEl.value) logEl.value.scrollTop = logEl.value.scrollHeight;});
+  function onConversationScroll() {
+    const el = logEl.value;
+    if (!el) return;
+    nearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (nearBottom.value) hasNewMessages.value = false;
+  }
+  async function scrollToLatest({force = false} = {}) {
+    const follow = force || nearBottom.value;
+    await nextTick();
+    if (!logEl.value) return;
+    if (follow) {
+      logEl.value.scrollTop = logEl.value.scrollHeight;
+      nearBottom.value = true;
+      hasNewMessages.value = false;
+    } else {
+      hasNewMessages.value = true;
+    }
+  }
+  async function focusInput() {
+    await nextTick();
+    if (!selected.value) inputEl.value?.focus({preventScroll: true});
+  }
   async function api(url, options) {
     const response = await fetch(url, options);
     if (!response.ok) {
@@ -25,10 +47,15 @@ createApp({setup() {
   function stopConnection() {if(stream) stream.close(); stream=null; if(poll) clearInterval(poll); poll=null;}
   async function refresh(item) {
     const data = await (await api(`/reports/${item.report_id}`)).json();
+    const wasPending = item.status === 'queued' || item.status === 'running';
     Object.assign(item, {status:data.status, result:data.result, report_html:data.report_html, error:data.error, brand:data.result?.brand || data.result?.report?.brand || data.request?.brand || item.brand});
     if (data.status === 'completed' || data.status === 'failed') {
-      if (activeItem === item || activeItem === null) {stopConnection(); sending.value=false;}
-      item.connectionMessage=''; scroll();
+      if (activeItem === item) {
+        stopConnection(); activeItem=null; sending.value=false;
+        if (wasPending) focusInput();
+      }
+      item.connectionMessage='';
+      if (wasPending) scrollToLatest();
     }
     return data;
   }
@@ -48,7 +75,7 @@ createApp({setup() {
       item.lastEventId=id; item.events.push({...data,id}); item.latest=data.message;
       if (!['completed','failed'].includes(data.step)) item.status='running';
       else {try {await refresh(item);} catch {item.connectionMessage='결과를 불러오지 못했습니다.';}}
-      scroll();
+      scrollToLatest();
     };
     stream.onerror = () => {item.connectionMessage='연결을 복구하고 있습니다. 진행 중인 분석은 계속됩니다.';};
     // Polling also recovers when a proxy drops the terminal SSE frame.
@@ -61,14 +88,20 @@ createApp({setup() {
     if(sending.value || !ready.value || !request.trim()) return;
     sending.value=true;
     messages.value.push({id:++counter,kind:'user',text:`${requestedSeason} · ${brand.value}\n${request}`});
-    const item=newItem(request,requestedSeason); messages.value.push(item); input.value=''; scroll();
+    const item=newItem(request,requestedSeason); messages.value.push(item); input.value=''; scrollToLatest({force: true});
     try {
       const result=await (await api('/reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({season:requestedSeason,planning_request:request,thread_id:thread})})).json();
       item.report_id=result.report_id;
       connect(item);
-    } catch(error) {item.status='failed';item.error=error.message;sending.value=false;}
+    } catch(error) {item.status='failed';item.error=error.message;sending.value=false;scrollToLatest();focusInput();}
   }
   function submit() {generate(input.value.trim());}
+  function onInputKeydown(event) {
+    // IME confirmation must not submit a half-composed Korean message.
+    if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    submit();
+  }
   function retry(item) {generate(item.request,item.season);}
   async function downloadPdf(item) {
     if(item.downloading) return;
@@ -104,5 +137,5 @@ createApp({setup() {
     } catch {configurationError.value='분석 서버에 연결할 수 없습니다. 서버 실행 상태를 확인하고 새로고침해 주세요.';}
   });
   onBeforeUnmount(()=>{stopConnection();document.removeEventListener('keydown',modalKeys);});
-  return {brand,season,seasons,input,sending,ready,configurationError,messages,selected,logEl,modalEl,exampleRequest,axisLabel,statusLabel,generate,submit,retry,reconnect,downloadPdf};
+  return {brand,season,seasons,input,sending,ready,configurationError,messages,selected,logEl,modalEl,inputEl,hasNewMessages,onConversationScroll,scrollToLatest,onInputKeydown,exampleRequest,axisLabel,statusLabel,generate,submit,retry,reconnect,downloadPdf};
 }}).mount('#app');

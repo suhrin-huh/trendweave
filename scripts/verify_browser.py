@@ -38,7 +38,7 @@ async def verify():
             response=await created.value
             assert response.status==202,await response.text()
             report_id=(await response.json())['report_id']
-            assert await button.is_disabled()
+            assert await page.get_by_role('button',name='보고서 생성',exact=True).is_disabled()
             # Keep this page open while the job runs. Reload now resets the chat.
             for _ in range(180):
                 status=await page.request.get(f'http://127.0.0.1:8600/reports/{report_id}')

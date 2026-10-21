@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.mark.browser
 @pytest.mark.parametrize('job_status', ['running', 'completed'])
 def test_reload_starts_new_conversation(result, job_status):
-    from playwright.async_api import async_playwright
+    from playwright.async_api import async_playwright, expect
     final = TypeAdapter(dict).dump_python(result, mode='json')
 
     async def verify():
@@ -73,7 +73,8 @@ def test_reload_starts_new_conversation(result, job_status):
                     await page.get_by_role('button', name='전체 보고서 보기').click()
                     await page.get_by_role('dialog').wait_for()
                 else:
-                    assert await button.is_disabled()
+                    await expect(page.locator('.progress')).to_contain_text('테스트 분석 진행')
+                    assert await page.get_by_role('button', name='보고서 생성', exact=True).is_disabled()
                 assert len(requests) == 1
                 first_thread = requests[0]['thread_id']
                 assert first_thread != 'old-thread'

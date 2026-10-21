@@ -259,3 +259,41 @@ textarea::placeholder { color: #767676; }
   * { scroll-behavior: auto !important; transition: none !important; }
   .spinner { animation: none; }
 }
+
+/* Conversation mode: keep the composer visible and scroll only the transcript. */
+.conversation-frame { position: relative; flex: 1; min-height: 0; }
+.conversation-frame > .conversation { height: 100%; overscroll-behavior-y: contain; }
+.workspace-heading, .composer { flex-shrink: 0; }
+.user { flex-direction: column; align-items: flex-end; }
+.message-author { margin-bottom: 7px; color: var(--muted); font-size: 10px; }
+.user-bubble, .summary, .progress { overflow-wrap: anywhere; }
+.latest-message {
+  position: absolute;
+  z-index: 2;
+  right: 20px;
+  bottom: 12px;
+  padding: 9px 14px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 11px;
+}
+.latest-message:hover { background: var(--ink); color: var(--paper); }
+.has-conversation { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+.has-conversation header { flex-shrink: 0; width: 100%; min-height: 96px; padding-block: 18px; }
+.has-conversation .wordmark { font-size: 43px; }
+.has-conversation .wordmark small { margin-top: 9px; font-size: 6px; }
+.has-conversation main { display: flex; flex: 1; min-height: 0; width: 100%; padding-block: 20px; justify-content: center; }
+.has-conversation .intro { display: none; }
+.has-conversation .workspace { flex: 1; width: 100%; max-width: 1100px; min-height: 0; height: 100%; max-height: none; }
+.has-conversation .conversation { padding-bottom: 48px; scroll-behavior: auto; }
+@media (max-width: 700px) {
+  .has-conversation header { min-height: 82px; padding: 16px 20px; }
+  .has-conversation .wordmark { font-size: 34px; }
+  .has-conversation .wordmark small { font-size: 5px; }
+  .has-conversation main { padding: 10px 12px 12px; }
+  .has-conversation .workspace-heading { padding: 13px 15px; }
+  .has-conversation .composer { padding: 12px; }
+  .has-conversation textarea { resize: none; }
+  .latest-message { right: 12px; }
+}
