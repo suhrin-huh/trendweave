@@ -25,7 +25,7 @@ async def verify():
             page=await browser.new_page(viewport={'width':1440,'height':1000})
             page.on('pageerror',lambda error:errors.append(str(error)))
             await page.goto('http://127.0.0.1:8600')
-            button=page.get_by_role('button',name='예시 질문으로 보고서 생성')
+            button=page.get_by_role('button',name='예시 질문으로 시작')
             await button.wait_for()
             await page.wait_for_function("!document.querySelector('.example button').disabled")
             await page.screenshot(path=str(ARTIFACTS/'desktop.png'),full_page=True)
@@ -33,12 +33,15 @@ async def verify():
             await page.screenshot(path=str(ARTIFACTS/'mobile.png'),full_page=True)
             assert await page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
             await page.set_viewport_size({'width':1440,'height':1000})
+            await button.click()
+            await page.get_by_role('button',name='확인하고 보고서 생성').wait_for(timeout=120000)
+            await page.screenshot(path=str(ARTIFACTS/'review-preview.png'),full_page=True)
             async with page.expect_response(lambda response:response.url.endswith('/reports') and response.request.method=='POST') as created:
-                await button.click()
+                await page.get_by_role('button',name='확인하고 보고서 생성').click()
             response=await created.value
             assert response.status==202,await response.text()
             report_id=(await response.json())['report_id']
-            assert await page.get_by_role('button',name='보고서 생성',exact=True).is_disabled()
+            assert await page.get_by_role('button',name='분석 방향 제안',exact=True).is_disabled()
             # Keep this page open while the job runs. Reload now resets the chat.
             for _ in range(180):
                 status=await page.request.get(f'http://127.0.0.1:8600/reports/{report_id}')

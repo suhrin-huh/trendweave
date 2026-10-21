@@ -311,3 +311,25 @@ textarea::placeholder { color: #767676; }
   .has-conversation textarea { resize: none; }
   .latest-message { right: 12px; }
 }
+
+/* Human review happens in the conversation before a report job is created. */
+.preview { padding: 21px; border: 1px solid #bcbcbc; background: var(--paper); }
+.preview h3 { margin: 19px 0; font-size: 18px; font-weight: 400; letter-spacing: -.035em; }
+.review-time { color: var(--muted); font-size: 10px; line-height: 1.8; }
+.review-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+.review-form label { display: block; margin: 14px 0 8px; color: var(--ink); font-size: 11px; }
+.review-form input, .review-form textarea { display: block; width: 100%; border: 1px solid #bcbcbc; border-radius: 0; padding: 11px; background: var(--paper); color: var(--ink); font: inherit; font-size: 12px; line-height: 1.8; }
+.review-form input[readonly] { background: #f5f5f5; color: #555; }
+.review-form input:disabled, .review-form textarea:disabled { opacity: .65; }
+.review-form input:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.review-fields small { display: block; margin-top: 8px; font-size: 9px; color: var(--muted); }
+.review-reason { padding: 13px; background: #f5f5f5; font-size: 11px; line-height: 1.9; }
+.review-reason span { font-size: 9px; color: var(--muted); }
+.review-reason p { margin: 5px 0 0; overflow-wrap: anywhere; }
+.review-help, .review-summary { font-size: 11px; line-height: 1.9; overflow-wrap: anywhere; }
+.review-help, .review-summary small { color: var(--muted); }
+.composer-meta > .automatic-season { margin-left: 0; font-size: 10px; }
+@media (max-width: 700px) {
+  .preview { padding: 16px; }
+  .review-fields { grid-template-columns: 1fr; gap: 0; }
+}

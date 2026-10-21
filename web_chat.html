@@ -19,19 +19,41 @@
       <div class="axes"><span>01 런웨이</span><span>02 컬러</span><span>03 시장</span><span>04 브랜드</span></div>
       <aside class="example">
         <div class="eyebrow">TRY YOUR FIRST REPORT</div><h2>어떤 상품을 준비하면 좋을까요?</h2>
-        <p>{{ season }} 시즌 {{ brand }}를 위해, 한국의 20~30대 고객이 일상에서 활용하기 쉬운 상품 중심으로 트렌드를 분석하고 상품기획 방향 3개를 제안해줘.</p>
-        <button class="primary" :disabled="sending || !ready" @click="generate(exampleRequest)">예시 질문으로 보고서 생성 <span>↗</span></button>
+        <p>다가오는 시즌 {{ brand }}를 위해, 한국의 20~30대 고객이 일상에서 활용하기 쉬운 상품 중심으로 트렌드를 분석하고 상품기획 방향 3개를 제안해줘.</p>
+        <button class="primary" :disabled="sending || pendingPreview || !ready" @click="generate(exampleRequest)">예시 질문으로 시작 <span>↗</span></button>
       </aside>
-      <p class="footnote">공개 웹 자료 기반 · {{ brand }} 4개 분야 종합 분석<br>분석은 약 2~4분 이상 소요될 수 있습니다.</p>
+      <p class="footnote">공개 웹 자료 기반 · {{ brand }} 4개 분야 종합 분석<br>분석 방향을 확인하고 승인하면 보고서를 생성합니다.</p>
     </section>
     <section class="workspace" aria-label="상품기획 대화">
       <div class="workspace-heading"><span class="status-dot"></span><strong>상품기획 리서치</strong><span>STRATEGY DESK</span></div>
       <div v-if="configurationError" class="notice error" role="alert">{{ configurationError }}</div>
       <div class="conversation-frame">
       <div class="conversation" ref="logEl" role="log" aria-label="대화 내역" aria-live="polite" @scroll.passive="onConversationScroll">
-        <div v-if="!messages.length" class="welcome"><div class="welcome-icon" aria-hidden="true">tw.</div><h2>무엇을 기획하고 있나요?</h2><p>분석 시즌과 상품기획 요청을 알려주세요.<br>네 분야를 조사하고, 검토를 거쳐 전략을 제안합니다.</p><div class="welcome-line"></div><small>예시 질문으로 첫 번째 보고서를 시작해 보세요.</small></div>
+        <div v-if="!messages.length" class="welcome"><div class="welcome-icon" aria-hidden="true">tw.</div><h2>무엇을 기획하고 있나요?</h2><p>상품기획 요청을 알려주세요.<br>시즌과 분석 방향을 제안하고, 승인 후 조사를 시작합니다.</p><div class="welcome-line"></div><small>예시 질문으로 첫 번째 보고서를 시작해 보세요.</small></div>
         <article v-for="item in messages" :key="item.id" :class="['message', item.kind]">
           <template v-if="item.kind==='user'"><span class="message-author">나</span><div class="user-bubble">{{ item.text }}</div></template>
+          <template v-else-if="item.kind==='preview'">
+            <div class="report-top"><span class="eyebrow">BEFORE THE RESEARCH</span><span class="pill">{{ item.status==='approved' ? '승인 완료' : item.status==='cancelled' ? '취소됨' : '방향 확인' }}</span></div>
+            <h3 :id="'review-heading-'+item.id" tabindex="-1">분석 방향을 확인해주세요</h3>
+            <p v-if="item.status==='planning'" class="progress"><span class="spinner"></span>요청 시점을 기준으로 시즌과 보고서 방향을 제안하고 있습니다.</p>
+            <template v-if="item.preview">
+              <p class="review-time">요청 기준 {{ requestTime(item.preview.requested_at) }}</p>
+              <form v-if="['review','approving','cancelling'].includes(item.status)" class="review-form" @submit.prevent="approvePreview(item)">
+                <div class="review-fields">
+                  <div><label :for="'review-season-'+item.id">분석 시즌</label><input :id="'review-season-'+item.id" v-model="item.preview.season" @keydown.enter.prevent maxlength="20" placeholder="YYYY S/S 또는 YYYY F/W" :disabled="item.status!=='review'" required></div>
+                  <div><label :for="'review-brand-'+item.id">분석 브랜드</label><input :id="'review-brand-'+item.id" :value="item.preview.brand" readonly><small>현재 서비스는 ZARA를 분석합니다.</small></div>
+                </div>
+                <div class="review-reason"><span>LLM 제안 · {{ item.suggestedSeason }}</span><p>{{ item.preview.reason }}</p></div>
+                <label :for="'review-request-'+item.id">상품기획 요청 확인</label><textarea :id="'review-request-'+item.id" v-model="item.preview.planning_request" rows="3" maxlength="4000" :disabled="item.status!=='review'" required></textarea>
+                <label :for="'review-direction-'+item.id">보고서 방향 확인</label><textarea :id="'review-direction-'+item.id" v-model="item.preview.report_direction" rows="3" maxlength="1500" :disabled="item.status!=='review'" required></textarea>
+                <p class="review-help">시즌과 요청·방향을 수정할 수 있습니다. 아래 버튼으로 승인하기 전에는 검색과 보고서 생성을 시작하지 않습니다.</p>
+                <div class="actions"><button class="primary" type="submit" :disabled="item.status!=='review'">{{ item.status==='approving' ? '분석 시작 중…' : '확인하고 보고서 생성' }}</button><button class="secondary" type="button" :disabled="item.status!=='review'" @click="cancelPreview(item)">생성 취소</button></div>
+              </form>
+              <div v-else class="review-summary"><p>{{ item.preview.season }} · {{ item.preview.brand }}</p><p>{{ item.preview.report_direction }}</p><small>{{ item.status==='approved' ? '확인한 내용으로 분석을 요청했습니다.' : '보고서 생성을 취소했습니다.' }}</small></div>
+            </template>
+            <p v-if="item.error" class="notice error" role="alert">{{ item.error }}</p>
+            <button v-if="item.status==='error'" class="secondary" :disabled="sending || pendingPreview || !ready" @click="generate(item.request)">분석 방향 다시 제안받기</button>
+          </template>
           <template v-else>
             <div class="report-top"><span class="eyebrow">TRENDWEAVE REPORT</span><span class="pill">{{ statusLabel(item.status) }}</span></div>
             <h3>{{ item.season }} · {{ item.brand }}</h3>
@@ -58,16 +80,16 @@
               <div class="actions"><button class="primary" @click="selected=item">전체 보고서 보기 ↗</button><button class="secondary" :disabled="item.downloading" @click="downloadPdf(item)">{{ item.downloading ? 'PDF 만드는 중…' : 'PDF 다운로드 ↓' }}</button></div>
               <p v-if="item.pdfError" class="notice error" role="alert">{{ item.pdfError }}</p>
             </template>
-            <div v-if="item.status==='failed'" class="notice error" role="alert">{{ item.error }}<button class="text-button" :disabled="sending || !ready" @click="retry(item)">같은 요청 다시 분석</button></div>
+            <div v-if="item.status==='failed'" class="notice error" role="alert">{{ item.error }}<button class="text-button" :disabled="sending || pendingPreview || !ready" @click="retry(item)">같은 요청 다시 분석</button></div>
           </template>
         </article>
       </div>
       <button v-if="hasNewMessages" class="latest-message" type="button" @click="scrollToLatest({force: true})">최신 대화로 이동 ↓</button>
       </div>
       <form class="composer" @submit.prevent="submit">
-        <div class="composer-meta"><label for="season">분석 시즌</label><select id="season" v-model="season" :disabled="sending"><option v-for="value in seasons" :key="value">{{ value }}</option></select><span>브랜드 {{ brand }} · 4개 분야 전체 조사</span></div>
-        <div class="input-row"><textarea ref="inputEl" v-model="input" aria-label="상품기획 요청" :placeholder="messages.length ? '다음 상품기획 요청을 입력하세요.' : '예: 데님 상품군 중심으로, 가벼운 여름 소재 위주로 기획해줘.'" rows="2" maxlength="4000" @keydown="onInputKeydown"></textarea><button class="send" type="submit" :disabled="sending || !ready || !input.trim()" aria-label="보고서 생성">↗</button></div>
-        <small>{{ sending ? '분석 중에도 다음 요청을 작성할 수 있습니다. 현재 분석이 끝나면 전송할 수 있습니다.' : 'Enter로 전송 · Shift+Enter로 줄바꿈 · 각 요청은 독립적인 보고서를 생성합니다.' }}</small>
+        <div class="composer-meta"><span class="automatic-season">시즌 자동 제안 · 사용자 확인 후 분석</span><span>브랜드 {{ brand }} · 4개 분야 전체 조사</span></div>
+        <div class="input-row"><textarea ref="inputEl" v-model="input" aria-label="상품기획 요청" :placeholder="messages.length ? '다음 상품기획 요청을 입력하세요.' : '예: 데님 상품군 중심으로, 가벼운 여름 소재 위주로 기획해줘.'" rows="2" maxlength="4000" @keydown="onInputKeydown"></textarea><button class="send" type="submit" :disabled="sending || pendingPreview || !ready || !input.trim()" aria-label="분석 방향 제안">↗</button></div>
+        <small>{{ pendingPreview ? '분석 방향을 확인하고 승인하거나 취소해주세요. 다음 요청의 초안을 작성할 수 있습니다.' : sending ? '분석 중에도 다음 요청을 작성할 수 있습니다. 완료 후 전송할 수 있습니다.' : 'Enter로 방향 제안 요청 · Shift+Enter로 줄바꿈 · 보고서 생성 전 확인합니다.' }}</small>
       </form>
     </section>
   </main>

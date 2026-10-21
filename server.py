@@ -67,12 +67,15 @@ async def lifespan(app: FastAPI):
     CREATION_COUNT += 1
     from services.report_store import ReportStore
     from services.report_service import ReportService
+    from services.preview_service import PreviewService
     from agent.trendweave.deps import initialize
     app.state.report_store = ReportStore(os.getenv("REPORT_DB_PATH", "reports.db"))
     app.state.trend_error = initialize()
     app.state.report_service = ReportService(
         app.state.report_store, workers=max(1, int(os.getenv("TREND_MAX_WORKERS", "1"))))
     app.state.pdf_semaphore = asyncio.Semaphore(1)
+    app.state.preview_service = PreviewService(app.state.report_store)
+    app.state.preview_semaphore = asyncio.Semaphore(1)
     # Fashion mode starts independently of the legacy incident MCP servers.
     if os.getenv("SERVICE_MODE", "trendweave") == "trendweave":
         try:

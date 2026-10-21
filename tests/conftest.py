@@ -1,6 +1,7 @@
 import re
 import pytest
 from agent.trendweave import engine as e
+from agent.trendweave.review import PlanningSuggestion
 
 
 class Search:
@@ -25,6 +26,9 @@ class Model:
         return Structured()
 
     def respond(self, schema, text):
+        if schema is PlanningSuggestion:
+            return PlanningSuggestion(season='2027 S/S',brand='ZARA',
+                report_direction='요청에 맞춘 상품기획 방향 3개를 제안한다.',reason='다음 봄·여름 시즌을 준비한다.')
         if schema is e.ResearchPlan:
             denim = '데님' in text
             axis = e.AxisPlan(focus_keywords=['denim'] if denim else [], query='', extra_aspect='데님' if denim else '')

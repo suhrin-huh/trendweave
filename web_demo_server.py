@@ -57,9 +57,11 @@ async def proxy_stream(message: str, thread_id: str = "web-demo"):
 
 # Report API proxy: retain error status and PDF attachment headers.
 @app.api_route("/reports", methods=["POST"])
+@app.api_route("/reports/preview", methods=["POST"])
+@app.api_route("/reports/preview/{preview_id}/cancel", methods=["POST"])
 @app.api_route("/reports/{report_id}", methods=["GET"])
 @app.api_route("/reports/{report_id}/pdf", methods=["GET"])
-async def proxy_report(req: Request, report_id: str = ""):
+async def proxy_report(req: Request, report_id: str = "", preview_id: str = ""):
     async with httpx.AsyncClient(timeout=120.0) as client:
         try:
             upstream = await client.request(req.method, f"{BACKEND}{req.url.path}",

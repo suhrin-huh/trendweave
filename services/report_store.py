@@ -16,6 +16,9 @@ class ReportStore:
         self.conn.row_factory = sqlite3.Row
         with self.conn:
             self.conn.executescript('''
+            CREATE TABLE IF NOT EXISTS report_previews (
+              id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, payload TEXT NOT NULL,
+              status TEXT NOT NULL, report_id TEXT, approval TEXT);
             CREATE TABLE IF NOT EXISTS report_jobs (
               id TEXT PRIMARY KEY, request TEXT NOT NULL, status TEXT NOT NULL,
               stage TEXT NOT NULL, created_at TEXT NOT NULL, finished_at TEXT,
@@ -27,11 +30,38 @@ class ReportStore:
         for row in self.conn.execute("SELECT id FROM report_jobs WHERE status IN ('queued','running')").fetchall():
             self.fail(row['id'], '서버 재시작으로 분석이 중단되었습니다. 다시 요청해 주세요.')
 
-    def create(self, request):
+    def create_preview(self, thread_id, payload):
+        preview_id = uuid.uuid4().hex
+        with self.lock, self.conn:
+            self.conn.execute('INSERT INTO report_previews (id,thread_id,payload,status) VALUES (?,?,?,?)',
+                              (preview_id, thread_id, json.dumps(payload, ensure_ascii=False), 'pending'))
+        return {**payload, 'preview_id': preview_id, 'status': 'pending'}
+
+    def get_preview(self, preview_id):
+        with self.lock:
+            row = self.conn.execute('SELECT * FROM report_previews WHERE id=?', (preview_id,)).fetchone()
+        if row is None:
+            return None
+        value = dict(row)
+        value['payload'] = json.loads(value['payload'])
+        value['approval'] = json.loads(value['approval']) if value['approval'] else None
+        return value
+
+    def cancel_preview(self, preview_id):
+        with self.lock, self.conn:
+            self.conn.execute("UPDATE report_previews SET status='cancelled' WHERE id=? AND status='pending'", (preview_id,))
+
+    def create(self, request, preview_id=None):
         report_id = uuid.uuid4().hex
         with self.lock, self.conn:
             self.conn.execute('INSERT INTO report_jobs (id,request,status,stage,created_at) VALUES (?,?,?,?,?)',
                               (report_id, json.dumps(request, ensure_ascii=False), 'queued', 'queued', now()))
+            if preview_id is not None:
+                updated = self.conn.execute(
+                    "UPDATE report_previews SET status='approved',report_id=?,approval=? WHERE id=? AND status='pending'",
+                    (report_id, json.dumps(request, ensure_ascii=False), preview_id)).rowcount
+                if updated != 1:
+                    raise ValueError('이미 처리된 분석 제안입니다.')
             self.event(report_id, {'step': 'queued', 'message': '분석을 준비하고 있습니다.'})
         return report_id
 

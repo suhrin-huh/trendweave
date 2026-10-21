@@ -19,8 +19,11 @@ class ReportService:
     @staticmethod
     def run_graph(request, emit):
         final = None
+        planning_request = request['planning_request']
+        if request.get('report_direction'):
+            planning_request += '\n\n보고서 방향: ' + request['report_direction']
         for mode, payload in engine.trend_agent.stream(
-                {**request, 'brand': DEFAULT_BRAND},
+                {**request, 'brand': DEFAULT_BRAND, 'planning_request': planning_request},
                 config={'recursion_limit': engine.RECURSION_LIMIT},
                 stream_mode=['custom', 'values']):
             if mode == 'custom':
@@ -36,12 +39,12 @@ class ReportService:
             raise RuntimeError('보고서가 생성되지 않았습니다.')
         return TypeAdapter(dict).dump_python(final, mode='json')
 
-    def submit(self, request):
+    def submit(self, request, preview_id=None):
         request = {**request, 'brand': DEFAULT_BRAND}
         if not self.slots.acquire(blocking=False):
             raise OverflowError('대기 중인 분석이 많습니다. 잠시 후 다시 시도해 주세요.')
         try:
-            report_id = self.store.create(request)
+            report_id = self.store.create(request, preview_id=preview_id)
             self.executor.submit(self._run, report_id, request)
             return report_id
         except Exception:

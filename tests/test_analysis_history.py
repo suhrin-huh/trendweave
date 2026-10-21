@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 import pytest
 from pydantic import TypeAdapter
+from browser_support import preview_response
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,6 +45,8 @@ def test_analysis_history_accumulates_and_can_be_folded(result, viewport):
                             content_type='text/css' if path.endswith('.css') else 'application/javascript')
                     elif path == '/health':
                         await route.fulfill(json={'analysis_ready':True,'brand':'ZARA'})
+                    elif path == '/reports/preview':
+                        await route.fulfill(json=preview_response(request))
                     elif path == '/reports' and request.method == 'POST':
                         requests.append(request.post_data_json)
                         report_id=f'history-{len(requests)}'
@@ -70,6 +73,7 @@ def test_analysis_history_accumulates_and_can_be_folded(result, viewport):
                 await page.wait_for_function("!document.querySelector('.example button').disabled")
                 await page.get_by_role('textbox',name='상품기획 요청').fill('누적 분석 과정 확인')
                 await page.get_by_role('textbox',name='상품기획 요청').press('Enter')
+                await page.get_by_role('button',name='확인하고 보고서 생성').click()
                 await page.wait_for_function('testStreams.length===1')
                 first=page.locator('.message.report').nth(0)
                 toggle=first.get_by_role('button',name='분석 과정')
@@ -139,6 +143,7 @@ def test_analysis_history_accumulates_and_can_be_folded(result, viewport):
                 # Each report keeps its own fold state and its own failed-job history.
                 await page.get_by_role('textbox',name='상품기획 요청').fill('두 번째 요청')
                 await page.get_by_role('textbox',name='상품기획 요청').press('Enter')
+                await page.get_by_role('button',name='확인하고 보고서 생성').click()
                 await page.wait_for_function('testStreams.length===2')
                 statuses['history-2']='failed'
                 records['history-2']=[{'id':1,'step':'queued','message':'두 번째 분석 대기'},

@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 import pytest
 from pydantic import TypeAdapter
+from browser_support import preview_response
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -48,6 +49,8 @@ def test_conversation_continues_and_preserves_history(result, viewport):
                             content_type='text/css' if path.endswith('.css') else 'application/javascript')
                     elif path == '/health':
                         await route.fulfill(json={'analysis_ready':True,'brand':'ZARA'})
+                    elif path == '/reports/preview':
+                        await route.fulfill(json=preview_response(request))
                     elif path == '/reports' and request.method == 'POST':
                         requests.append(request.post_data_json)
                         report_id = f'conversation-{len(requests)}'
@@ -71,10 +74,12 @@ def test_conversation_continues_and_preserves_history(result, viewport):
                 await page.goto('http://localhost:8765/')
                 await page.wait_for_function("!document.querySelector('.example button').disabled")
                 textbox = page.get_by_role('textbox',name='상품기획 요청')
-                send = page.get_by_role('button',name='보고서 생성',exact=True)
+                send = page.get_by_role('button',name='분석 방향 제안',exact=True)
                 await textbox.fill('첫 번째 상품기획 요청')
+                await textbox.press('Enter')
+                await page.get_by_role('button',name='확인하고 보고서 생성').wait_for()
                 async with page.expect_request(lambda request:request.method=='POST' and request.url.endswith('/reports')):
-                    await textbox.press('Enter')
+                    await page.get_by_role('button',name='확인하고 보고서 생성').click()
                 await page.wait_for_function('testStreams.length === 1')
                 await expect(page.locator('.message.user')).to_have_count(1)
                 await expect(page.locator('.message.report')).to_have_count(1)
@@ -91,8 +96,10 @@ def test_conversation_continues_and_preserves_history(result, viewport):
                 await expect(send).to_be_enabled()
                 assert await textbox.input_value()=='두 번째 상품기획 요청'
                 assert await textbox.evaluate('(el)=>document.activeElement===el')
+                await textbox.press('Enter')
+                await page.get_by_role('button',name='확인하고 보고서 생성').wait_for()
                 async with page.expect_request(lambda request:request.method=='POST' and request.url.endswith('/reports')):
-                    await textbox.press('Enter')
+                    await page.get_by_role('button',name='확인하고 보고서 생성').click()
                 await page.wait_for_function('testStreams.length === 2')
                 await expect(page.locator('.message.user')).to_have_count(2)
                 await expect(page.locator('.message.report')).to_have_count(2)

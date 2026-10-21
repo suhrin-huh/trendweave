@@ -2,10 +2,9 @@ const {createApp, ref, reactive, nextTick, watch, onMounted, onBeforeUnmount} = 
 createApp({setup() {
   const exampleRequest = '한국의 20-30대 고객이 일상에서 활용하기 쉬운 상품 중심으로 런웨이·컬러·시장·브랜드 트렌드를 분석하고 상품기획 방향 3개를 제안해줘.';
   const brand = ref('ZARA');
-  const season = ref('2027 S/S'), input = ref(''), sending = ref(false), ready = ref(false);
+  const input = ref(''), sending = ref(false), ready = ref(false), pendingPreview = ref(null);
   const configurationError = ref(''), messages = ref([]), selected = ref(null), logEl = ref(null), modalEl = ref(null), inputEl = ref(null);
   const nearBottom = ref(true), hasNewMessages = ref(false);
-  const seasons = ['2026 F/W','2027 S/S','2027 F/W','2028 S/S','2028 F/W'];
   // A page load always starts a fresh conversation. Remove keys written by
   // earlier versions, but leave unrelated application storage untouched.
   sessionStorage.removeItem('trendweave-thread');
@@ -123,17 +122,63 @@ createApp({setup() {
   function newItem(request, reportSeason) {
     return reactive({id:++counter,kind:'report',brand:brand.value,season:reportSeason,request,status:'queued',events:[],historyExpanded:true,lastEventId:0,latest:'',connectionMessage:'',result:null,report_html:'',error:'',downloading:false,pdfError:''});
   }
-  async function generate(request, requestedSeason=season.value) {
-    if(sending.value || !ready.value || !request.trim()) return;
+  async function generate(request) {
+    if(sending.value || pendingPreview.value || !ready.value || !request.trim()) return;
     sending.value=true;
-    messages.value.push({id:++counter,kind:'user',text:`${requestedSeason} · ${brand.value}\n${request}`});
-    const item=newItem(request,requestedSeason); messages.value.push(item); input.value=''; scrollToLatest({force: true});
+    messages.value.push({id:++counter,kind:'user',text:`${brand.value}\n${request}`});
+    const item=reactive({id:++counter,kind:'preview',status:'planning',request,preview:null,suggestedSeason:'',error:''});
+    messages.value.push(item); pendingPreview.value=item; input.value=''; scrollToLatest({force:true});
+    let followPreview=false;
     try {
-      const result=await (await api('/reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({season:requestedSeason,planning_request:request,thread_id:thread})})).json();
-      item.report_id=result.report_id;
-      connect(item);
-    } catch(error) {item.status='failed';item.error=error.message;sending.value=false;scrollToLatest();focusInput();}
+      const data=await (await api('/reports/preview',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({planning_request:request,thread_id:thread})})).json();
+      followPreview=nearBottom.value;
+      item.preview=data; item.suggestedSeason=data.season; item.status='review';
+    } catch(error) {
+      item.status='error'; item.error=error.message; pendingPreview.value=null;
+    } finally {
+      sending.value=false;
+      if (item.status==='review') {
+        await nextTick();
+        if (followPreview) {
+          const heading=document.getElementById('review-heading-'+item.id);
+          heading?.scrollIntoView({block:'start'});
+          heading?.focus({preventScroll:true});
+        } else scrollToLatest();
+      } else {scrollToLatest();focusInput();}
+    }
   }
+  async function approvePreview(item) {
+    if(item.status!=='review' || sending.value) return;
+    const match=/^(20\d{2})\s*(S\/?S|F\/?W)$/i.exec(item.preview.season.trim());
+    if(!match || !item.preview.planning_request.trim() || !item.preview.report_direction.trim()) {
+      item.error='시즌은 YYYY S/S 또는 YYYY F/W 형식으로 입력하고 요청과 보고서 방향을 채워 주세요.';
+      return;
+    }
+    item.preview.season=`${match[1]} ${match[2].toUpperCase().startsWith('S')?'S/S':'F/W'}`;
+    item.status='approving'; item.error=''; sending.value=true;
+    try {
+      const response=await (await api('/reports',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({preview_id:item.preview.preview_id,approved:true,thread_id:thread,
+          season:item.preview.season,brand:item.preview.brand,
+          planning_request:item.preview.planning_request.trim(),report_direction:item.preview.report_direction.trim()})})).json();
+      item.status='approved'; pendingPreview.value=null;
+      const report=newItem(item.preview.planning_request.trim(),item.preview.season);
+      report.report_id=response.report_id; report.brand=item.preview.brand;
+      messages.value.push(report);scrollToLatest({force:true});connect(report);
+    } catch(error) {item.status='review';item.error=error.message;sending.value=false;}
+  }
+  async function cancelPreview(item) {
+    if(item.status!=='review' || sending.value) return;
+    item.status='cancelling';item.error='';sending.value=true;
+    try {
+      await api(`/reports/preview/${item.preview.preview_id}/cancel`,{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({thread_id:thread})});
+      item.status='cancelled';pendingPreview.value=null;focusInput();
+    } catch(error) {item.status='review';item.error=error.message;}
+    finally {sending.value=false;}
+  }
+  const requestTime = value => value ? value.slice(0,16).replace('T',' ')+' (한국시간)' : '';
   function submit() {generate(input.value.trim());}
   function onInputKeydown(event) {
     // IME confirmation must not submit a half-composed Korean message.
@@ -141,7 +186,7 @@ createApp({setup() {
     event.preventDefault();
     submit();
   }
-  function retry(item) {generate(item.request,item.season);}
+  function retry(item) {generate(item.request);}
   async function downloadPdf(item) {
     if(item.downloading) return;
     item.downloading=true; item.pdfError='';
@@ -176,5 +221,5 @@ createApp({setup() {
     } catch {configurationError.value='분석 서버에 연결할 수 없습니다. 서버 실행 상태를 확인하고 새로고침해 주세요.';}
   });
   onBeforeUnmount(()=>{stopConnection();document.removeEventListener('keydown',modalKeys);});
-  return {brand,season,seasons,input,sending,ready,configurationError,messages,selected,logEl,modalEl,inputEl,hasNewMessages,onConversationScroll,scrollToLatest,onInputKeydown,exampleRequest,axisLabel,stepLabel,statusLabel,setHistoryElement,toggleHistory,generate,submit,retry,reconnect,downloadPdf};
+  return {brand,input,sending,ready,pendingPreview,approvePreview,cancelPreview,requestTime,configurationError,messages,selected,logEl,modalEl,inputEl,hasNewMessages,onConversationScroll,scrollToLatest,onInputKeydown,exampleRequest,axisLabel,stepLabel,statusLabel,setHistoryElement,toggleHistory,generate,submit,retry,reconnect,downloadPdf};
 }}).mount('#app');

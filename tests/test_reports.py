@@ -10,6 +10,7 @@ import pytest
 from services.report_routes import router
 from services.report_service import ReportService
 from services.report_store import ReportStore
+from services.preview_service import PreviewService
 from services.pdf_service import render_markdown
 
 
@@ -22,6 +23,8 @@ def report_app(tmp_path, result):
         app.state.report_store=store
         app.state.report_service=ReportService(store,runner=lambda request,emit:final)
         app.state.trend_error=None
+        app.state.preview_service=PreviewService(store)
+        app.state.preview_semaphore=asyncio.Semaphore(1)
         app.state.pdf_semaphore=asyncio.Semaphore(1)
         yield
         app.state.report_service.close()
@@ -32,7 +35,10 @@ def report_app(tmp_path, result):
 
 
 def completed(client):
-    response=client.post('/reports',json={'season':'2027 SS','planning_request':'일상 상품 기획'})
+    preview=client.post('/reports/preview',json={'planning_request':'일상 상품 기획'}).json()
+    response=client.post('/reports',json={
+        'preview_id':preview['preview_id'],'approved':True,'season':'2027 SS','brand':'ZARA',
+        'planning_request':'일상 상품 기획','report_direction':preview['report_direction']})
     assert response.status_code==202
     report_id=response.json()['report_id']
     for _ in range(100):
@@ -72,7 +78,7 @@ def test_validation_and_unavailable(report_app):
                          {'season':'2027 SS','planning_request':'x'*4001}]:
             assert client.post('/reports',json=request).status_code==422
         report_app.state.trend_error='API 키를 설정하세요.'
-        assert client.post('/reports',json={'season':'2027 SS','planning_request':'기획'}).status_code==503
+        assert client.post('/reports/preview',json={'planning_request':'기획'}).status_code==503
 
 
 def test_restart_isolation_and_failure(tmp_path):

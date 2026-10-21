@@ -1,34 +1,85 @@
 import asyncio
 import json
+import logging
 import re
-from typing import Annotated
+from typing import Annotated, Literal
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agent.trendweave.config import DEFAULT_BRAND
+from agent.trendweave.review import normalize_season, request_time
 
 router = APIRouter()
 
 
-class ReportRequest(BaseModel):
-    season: str = Field(min_length=4, max_length=20)
-    planning_request: str = Field(min_length=1, max_length=4000)
+class ThreadRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
     thread_id: str = Field(default='web', min_length=1, max_length=100)
 
-    @field_validator('planning_request', 'thread_id', mode='before')
+    @field_validator('thread_id', mode='before')
     @classmethod
-    def strip_text(cls, value):
+    def strip_thread(cls, value):
         return value.strip() if isinstance(value, str) else value
+
+
+class PreviewRequest(ThreadRequest):
+    planning_request: str = Field(min_length=1, max_length=4000)
+
+    @field_validator('planning_request', mode='before')
+    @classmethod
+    def strip_request(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class ReportRequest(PreviewRequest):
+    preview_id: str = Field(min_length=1, max_length=100)
+    approved: Literal[True]
+    brand: Literal['ZARA']
+    season: str = Field(min_length=4, max_length=20)
+    report_direction: str = Field(min_length=1, max_length=1500)
 
     @field_validator('season')
     @classmethod
     def season_format(cls, value):
-        value = value.strip().upper()
-        match = re.fullmatch(r'(20\d{2})\s*(S/?S|F/?W)', value)
-        if not match:
-            raise ValueError('시즌은 2027 S/S 또는 2027 F/W 형식으로 입력하세요.')
-        return f'{match[1]} {"S/S" if match[2].startswith("S") else "F/W"}'
+        return normalize_season(value)
+
+    @field_validator('report_direction', mode='before')
+    @classmethod
+    def strip_direction(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+@router.post('/reports/preview')
+async def preview_report(body: PreviewRequest, request: Request):
+    if request.app.state.trend_error:
+        raise HTTPException(503, request.app.state.trend_error)
+    requested_at = request_time()
+    try:
+        async with request.app.state.preview_semaphore:
+            return await asyncio.to_thread(request.app.state.preview_service.propose,
+                body.planning_request, body.thread_id, requested_at)
+    except Exception:
+        logging.getLogger(__name__).exception('Report preview failed')
+        raise HTTPException(503, '분석 방향을 제안하지 못했습니다. 모델 설정·호출 한도를 확인하고 다시 시도해 주세요. 보고서는 생성하지 않았습니다.')
+
+
+def get_preview(request, preview_id, thread_id):
+    preview = request.app.state.report_store.get_preview(preview_id)
+    if preview is None or preview['thread_id'] != thread_id:
+        raise HTTPException(404, '해당 대화의 분석 제안을 찾을 수 없습니다.')
+    return preview
+
+
+@router.post('/reports/preview/{preview_id}/cancel')
+async def cancel_preview(preview_id: str, body: ThreadRequest, request: Request):
+    store = request.app.state.report_store
+    with store.lock:
+        preview = get_preview(request, preview_id, body.thread_id)
+        if preview['status'] == 'approved':
+            raise HTTPException(409, '이미 승인하여 생성 중인 보고서입니다.')
+        store.cancel_preview(preview_id)
+    return {'status': 'cancelled'}
 
 
 def get_report(request, report_id):
@@ -42,10 +93,22 @@ def get_report(request, report_id):
 async def create_report(body: ReportRequest, request: Request):
     if request.app.state.trend_error:
         raise HTTPException(503, request.app.state.trend_error)
-    try:
-        report_id = request.app.state.report_service.submit(body.model_dump())
-    except OverflowError as error:
-        raise HTTPException(429, str(error)) from error
+    store = request.app.state.report_store
+    # The store lock serializes approval/cancellation. Job insertion and the
+    # pending->approved update also share one SQLite transaction in create().
+    with store.lock:
+        preview = get_preview(request, body.preview_id, body.thread_id)
+        payload = {**body.model_dump(), 'requested_at': preview['payload']['requested_at']}
+        if preview['status'] == 'approved':
+            if preview['approval'] != payload:
+                raise HTTPException(409, '이미 다른 내용으로 승인한 제안입니다. 새 질문으로 다시 확인해 주세요.')
+            return {'report_id': preview['report_id'], 'status': store.get(preview['report_id'])['status']}
+        if preview['status'] != 'pending':
+            raise HTTPException(409, '취소한 제안입니다. 새 질문으로 다시 확인해 주세요.')
+        try:
+            report_id = request.app.state.report_service.submit(payload, preview_id=body.preview_id)
+        except OverflowError as error:
+            raise HTTPException(429, str(error)) from error
     return {'report_id': report_id, 'status': 'queued'}
 
 
